@@ -6,6 +6,12 @@ Kubernetes requires a set of machines to host the Kubernetes control plane and t
 
 > Ensure the [compartment](https://docs.cloud.oracle.com/en-us/iaas/Content/Identity/Tasks/managingcompartments.htm) has been created and you have the permissions in it.
 
+Get the compartment OCID:
+```
+C=$(oci iam compartment list --raw-output --query 'data[0].id')
+echo $C
+```
+
 ## Networking
 
 The Kubernetes [networking model](https://kubernetes.io/docs/concepts/cluster-administration/networking/#kubernetes-model) assumes a flat network in which containers and nodes can communicate with each other. In cases where this is not desired [network policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) can limit how groups of containers are allowed to communicate with each other and external network endpoints.
@@ -16,13 +22,15 @@ The Kubernetes [networking model](https://kubernetes.io/docs/concepts/cluster-ad
 
 In this section a dedicated [Virtual Cloud Network]() (VCN) will be setup to host the Kubernetes cluster.
 
-Create the `kubernetes-the-hard-way-oci` custom VCN:
+Create the `kubernetes-the-hard-way` custom VCN:
 
 ```
-oci network vcn create --compartment-id <Compartment OCID> \
+V=$(oci network vcn create --compartment-id $C \
   --display-name kubernetes-the-hard-way \
   --dns-label thehardway \
-  --cidr-block 10.240.0.0/24
+  --cidr-block 10.240.0.0/24 \
+  --raw-output --query 'data.id')
+echo $V
 ```
 
 A [subnet](https://cloud.google.com/compute/docs/vpc/#vpc_networks_and_subnets) must be provisioned with an IP address range large enough to assign a private IP address to each node in the Kubernetes cluster.
@@ -30,48 +38,160 @@ A [subnet](https://cloud.google.com/compute/docs/vpc/#vpc_networks_and_subnets) 
 Create the `kubernetes` subnet in the `kubernetes-the-hard-way` VPC network:
 
 ```
-oci network subnet create --compartment-id <Compartment OCID> \
-  --vcn-id <VCN OCID> \
+S=$(oci network subnet create --compartment-id $C \
+  --vcn-id $V \
   --display-name kubernetes \
-  --cidr-block 10.240.0.0/24
+  --cidr-block 10.240.0.0/24 \
+  --raw-output --query 'data.id')
+echo $S
 ```
 
 > The `10.240.0.0/24` IP address range can host up to 254 compute instances.
 
 Create an internet gateway that allows internet access:
 ```
-oci network internet-gateway create \
-  --compartment-id <Compartment OCID> \
-  --vcn-id <VCN OCID> \
+I=$(oci network internet-gateway create \
+  --compartment-id $C \
+  --vcn-id $V \
   --is-enabled true \
-  --display-name kubernetes-the-hard-way-internet
+  --display-name kubernetes-the-hard-way-internet-gw \
+  --raw-output --query 'data.id')
+echo $I
+```
+
+Get the default routing table:
+```
+R=$(oci network route-table list --compartment-id $C --vcn-id $V --raw-output --query 'data[0].id')
+echo $R
+```
+Add a routing rule to the default routing table:
+```
+oci network route-table update \
+  --rt-id $R \
+  --force \
+  --route-rules "[{\"cidrBlock\": \"0.0.0.0/0\", \"networkEntityId\": \"$I\"}]"
 ```
 
 ### Security List
 
-Create a security list that allows internal communication across all protocols, and external SSH, ICMP, and HTTPS(kubernetes API server):
+Get the default security list:
+```
+SL=$(oci network security-list list \
+  --compartment-id $C \
+  --vcn-id $V \
+  --raw-output --query 'data[0].id')
+echo $SL
+```
+Add rules to the default security list to allows internal communication across all protocols, and external SSH, ICMP, and HTTPS(kubernetes API server):
 
 ```
-oci network security-list create --display-name kubernetes-the-hard-way-rules --compartment-id $C --vcn-id $VCN  \
+oci network security-list update \
+  --force \
+  --security-list-id $SL \
   --egress-security-rules '[{"destination": "0.0.0.0/0", "destinationType": "CIDR_BLOCK", "protocol": "all", "isStateless": false}]' \
   --ingress-security-rules '[{"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 6, "isStateless": false, "tcpOptions": {"destinationPortRange": {"max": 22, "min": 22}}},  {"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 1, "isStateless": false}, {"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 6, "isStateless": false, "tcpOptions": {"destinationPortRange": {"max": 6443, "min": 6443}}}, {"source": "10.240.0.0/24", "sourceType": "CIDR_BLOCK", "protocol": "all", "isStateless": false}, {"source": "10.200.0.0/16", "sourceType": "CIDR_BLOCK", "protocol": "all", "isStateless": false}]'
 
 ```
 
-> An [external load balancer](https://cloud.google.com/compute/docs/load-balancing/network/) will be used to expose the Kubernetes API Servers to remote clients.
-
-List the firewall rules in the `kubernetes-the-hard-way` VPC network:
+List the security rules in the `kubernetes-the-hard-way` VPC network:
 
 ```
-gcloud compute firewall-rules list --filter="network:kubernetes-the-hard-way"
+oci network security-list get --security-list-id $SL
 ```
 
 > output
 
 ```
-NAME                                    NETWORK                  DIRECTION  PRIORITY  ALLOW                 DENY
-kubernetes-the-hard-way-allow-external  kubernetes-the-hard-way  INGRESS    1000      tcp:22,tcp:6443,icmp
-kubernetes-the-hard-way-allow-internal  kubernetes-the-hard-way  INGRESS    1000      tcp,udp,icmp
+{
+  "data": {
+    "compartment-id": "<compartment OCID>", 
+    "defined-tags": {}, 
+    "display-name": "Default Security List for kubernetes-the-hard-way", 
+    "egress-security-rules": [
+      {
+        "description": null, 
+        "destination": "0.0.0.0/0", 
+        "destination-type": "CIDR_BLOCK", 
+        "icmp-options": null, 
+        "is-stateless": false, 
+        "protocol": "all", 
+        "tcp-options": null, 
+        "udp-options": null
+      }
+    ], 
+    "freeform-tags": {}, 
+    "id": "<Security list OCID>", 
+    "ingress-security-rules": [
+      {
+        "description": null, 
+        "icmp-options": null, 
+        "is-stateless": false, 
+        "protocol": "6", 
+        "source": "0.0.0.0/0", 
+        "source-type": "CIDR_BLOCK", 
+        "tcp-options": {
+          "destination-port-range": {
+            "max": 22, 
+            "min": 22
+          }, 
+          "source-port-range": null
+        }, 
+        "udp-options": null
+      }, 
+      {
+        "description": null, 
+        "icmp-options": null, 
+        "is-stateless": false, 
+        "protocol": "1", 
+        "source": "0.0.0.0/0", 
+        "source-type": "CIDR_BLOCK", 
+        "tcp-options": null, 
+        "udp-options": null
+      }, 
+      {
+        "description": null, 
+        "icmp-options": null, 
+        "is-stateless": false, 
+        "protocol": "6", 
+        "source": "0.0.0.0/0", 
+        "source-type": "CIDR_BLOCK", 
+        "tcp-options": {
+          "destination-port-range": {
+            "max": 6443, 
+            "min": 6443
+          }, 
+          "source-port-range": null
+        }, 
+        "udp-options": null
+      }, 
+      {
+        "description": null, 
+        "icmp-options": null, 
+        "is-stateless": false, 
+        "protocol": "all", 
+        "source": "10.240.0.0/24", 
+        "source-type": "CIDR_BLOCK", 
+        "tcp-options": null, 
+        "udp-options": null
+      }, 
+      {
+        "description": null, 
+        "icmp-options": null, 
+        "is-stateless": false, 
+        "protocol": "all", 
+        "source": "10.200.0.0/16", 
+        "source-type": "CIDR_BLOCK", 
+        "tcp-options": null, 
+        "udp-options": null
+      }
+    ], 
+    "lifecycle-state": "AVAILABLE", 
+    "time-created": "2020-02-25T07:36:12.815000+00:00", 
+    "vcn-id": "<VCN OCID>"
+  }, 
+  "etag": "17f9c750"
+}
+
 ```
 
 ### Kubernetes Public IP Address
@@ -98,7 +218,34 @@ kubernetes-the-hard-way  us-west1  XX.XXX.XXX.XX  RESERVED
 
 ## Compute Instances
 
-The compute instances in this lab will be provisioned using [Ubuntu Server](https://www.ubuntu.com/server) 18.04, which has good support for the [containerd container runtime](https://github.com/containerd/containerd). Each compute instance will be provisioned with a fixed private IP address to simplify the Kubernetes bootstrapping process.
+The compute instances in this lab will be provisioned using [Oracle Linux](https://www.oracle.com/linux/) 7, which has good support for the [containerd container runtime](https://github.com/containerd/containerd). Each compute instance will be provisioned with a fixed private IP address and a fixed public IP address to simplify the Kubernetes bootstrapping process.
+
+List and choose latest Oracle Linux 7 image:
+```
+
+IMG=$(oci compute image list \
+  --compartment-id $C \
+  --operating-system "Oracle Linux" \
+  --operating-system-version 7.7 --sort-by TIMECREATED \
+   --raw-output \
+  --query "data [?starts_with(\"display-name\", 'Oracle-Linux-7.7-20')]|[0].\"id\"")
+echo $IMG
+```
+
+List and choose the instance shape:
+```
+oci compute shape list --compartment-id $C --output table
+```
+
+List and choose the availability domain:
+```
+AD=$(oci iam availability-domain list --raw-output --query 'data[0].name')
+echo $AD
+```
+Create an [SSH key pair](https://docs.cloud.oracle.com/en-us/iaas/Content/Compute/Tasks/managingkeypairs.htm) to connect to instances:
+```
+ssh-keygen -t rsa -N "" -b 4096
+```
 
 ### Kubernetes Controllers
 
@@ -106,17 +253,17 @@ Create three compute instances which will host the Kubernetes control plane:
 
 ```
 for i in 0 1 2; do
-  gcloud compute instances create controller-${i} \
-    --async \
-    --boot-disk-size 200GB \
-    --can-ip-forward \
-    --image-family ubuntu-1804-lts \
-    --image-project ubuntu-os-cloud \
-    --machine-type n1-standard-1 \
-    --private-network-ip 10.240.0.1${i} \
-    --scopes compute-rw,storage-ro,service-management,service-control,logging-write,monitoring \
-    --subnet kubernetes \
-    --tags kubernetes-the-hard-way,controller
+  oci compute instance launch \
+    --availability-domain $AD \
+    --compartment-id $C \
+    --display-name controller-${i} \
+    --freeform-tags '{"kubernetes": "controller"}' \
+    --image-id $IMG \
+    --shape VM.Standard.E2.1 \
+    --subnet-id $S \
+    --private-ip 10.240.0.1${i} \
+    --assign-public-ip true \
+    --ssh-authorized-keys-file ~/.ssh/id_rsa.pub
 done
 ```
 
@@ -130,18 +277,18 @@ Create three compute instances which will host the Kubernetes worker nodes:
 
 ```
 for i in 0 1 2; do
-  gcloud compute instances create worker-${i} \
-    --async \
-    --boot-disk-size 200GB \
-    --can-ip-forward \
-    --image-family ubuntu-1804-lts \
-    --image-project ubuntu-os-cloud \
-    --machine-type n1-standard-1 \
-    --metadata pod-cidr=10.200.${i}.0/24 \
-    --private-network-ip 10.240.0.2${i} \
-    --scopes compute-rw,storage-ro,service-management,service-control,logging-write,monitoring \
-    --subnet kubernetes \
-    --tags kubernetes-the-hard-way,worker
+  oci compute instance launch \
+    --availability-domain $AD \
+    --compartment-id $C \
+    --display-name worker-${i} \
+    --freeform-tags '{"kubernetes": "worker"}' \
+    --image-id $IMG \
+    --shape VM.Standard.E2.1 \
+    --subnet-id $S \
+    --private-ip 10.240.0.2${i} \
+    --assign-public-ip true \
+    --ssh-authorized-keys-file ~/.ssh/id_rsa.pub
+  }
 done
 ```
 
@@ -150,86 +297,30 @@ done
 List the compute instances in your default region and specified compartment:
 
 ```
-gcloud compute instances list
+oci compute instance list --compartment-id $C --output table --query 'data [].{NAME:"display-name", AD: "availability-domain", SHAPE: "Shape", STATUS: "lifecycle-state"}'
 ```
 
 > output
 
 ```
-NAME          ZONE        MACHINE_TYPE   PREEMPTIBLE  INTERNAL_IP  EXTERNAL_IP     STATUS
-controller-0  us-west1-c  n1-standard-1               10.240.0.10  XX.XXX.XXX.XXX  RUNNING
-controller-1  us-west1-c  n1-standard-1               10.240.0.11  XX.XXX.X.XX     RUNNING
-controller-2  us-west1-c  n1-standard-1               10.240.0.12  XX.XXX.XXX.XX   RUNNING
-worker-0      us-west1-c  n1-standard-1               10.240.0.20  XXX.XXX.XXX.XX  RUNNING
-worker-1      us-west1-c  n1-standard-1               10.240.0.21  XX.XXX.XX.XXX   RUNNING
-worker-2      us-west1-c  n1-standard-1               10.240.0.22  XXX.XXX.XX.XX   RUNNING
++----------------------+--------------+-------+------------+
+| AD                   | NAME         | SHAPE | STATUS     |
++----------------------+--------------+-------+------------+
+| nzlf:US-ASHBURN-AD-1 | controller-0 | None  | RUNNING    |
+| nzlf:US-ASHBURN-AD-1 | controller-1 | None  | RUNNING    |
+| nzlf:US-ASHBURN-AD-1 | controller-2 | None  | RUNNING    |
+| nzlf:US-ASHBURN-AD-1 | worker-0     | None  | RUNNING    |
+| nzlf:US-ASHBURN-AD-1 | worker-1     | None  | RUNNING    |
+| nzlf:US-ASHBURN-AD-1 | worker-2     | None  | RUNNING    |
++----------------------+--------------+-------+------------+
 ```
 
-## Configuring SSH Access
+## Verifying SSH Access
 
-SSH will be used to configure the controller and worker instances. When connecting to compute instances for the first time SSH keys will be generated for you and stored in the project or instance metadata as described in the [connecting to instances](https://cloud.google.com/compute/docs/instances/connecting-to-instance) documentation.
 
-Test SSH access to the `controller-0` compute instances:
-
+Log into the `controller-0` instance:
 ```
-gcloud compute ssh controller-0
-```
-
-If this is your first time connecting to a compute instance SSH keys will be generated for you. Enter a passphrase at the prompt to continue:
-
-```
-WARNING: The public SSH key file for gcloud does not exist.
-WARNING: The private SSH key file for gcloud does not exist.
-WARNING: You do not have an SSH key for gcloud.
-WARNING: SSH keygen will be executed to generate a key.
-Generating public/private rsa key pair.
-Enter passphrase (empty for no passphrase):
-Enter same passphrase again:
-```
-
-At this point the generated SSH keys will be uploaded and stored in your project:
-
-```
-Your identification has been saved in /home/$USER/.ssh/google_compute_engine.
-Your public key has been saved in /home/$USER/.ssh/google_compute_engine.pub.
-The key fingerprint is:
-SHA256:nz1i8jHmgQuGt+WscqP5SeIaSy5wyIJeL71MuV+QruE $USER@$HOSTNAME
-The key's randomart image is:
-+---[RSA 2048]----+
-|                 |
-|                 |
-|                 |
-|        .        |
-|o.     oS        |
-|=... .o .o o     |
-|+.+ =+=.+.X o    |
-|.+ ==O*B.B = .   |
-| .+.=EB++ o      |
-+----[SHA256]-----+
-Updating project ssh metadata...-Updated [https://www.googleapis.com/compute/v1/projects/$PROJECT_ID].
-Updating project ssh metadata...done.
-Waiting for SSH key to propagate.
-```
-
-After the SSH keys have been updated you'll be logged into the `controller-0` instance:
-
-```
-Welcome to Ubuntu 18.04.3 LTS (GNU/Linux 4.15.0-1042-gcp x86_64)
-...
-
-Last login: Sun Sept 14 14:34:27 2019 from XX.XXX.XXX.XX
-```
-
-Type `exit` at the prompt to exit the `controller-0` compute instance:
-
-```
-$USER@controller-0:~$ exit
-```
-> output
-
-```
-logout
-Connection to XX.XXX.XXX.XXX closed
+ssh opc@<controller-0 publich IP>
 ```
 
 Next: [Provisioning a CA and Generating TLS Certificates](04-certificate-authority.md)
