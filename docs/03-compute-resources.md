@@ -1,8 +1,10 @@
 # Provisioning Compute Resources
 
-Kubernetes requires a set of machines to host the Kubernetes control plane and the worker nodes where containers are ultimately run. In this lab you will provision the compute resources required for running a secure and highly available Kubernetes cluster across a single [compute zone](https://cloud.google.com/compute/docs/regions-zones/regions-zones).
+Kubernetes requires a set of machines to host the Kubernetes control plane and the worker nodes where containers are ultimately run. In this lab you will provision the compute resources required for running a secure and highly available Kubernetes cluster in a [region](https://docs.cloud.oracle.com/en-us/iaas/Content/General/Concepts/regions.htm) and in a [compartment](https://docs.cloud.oracle.com/en-us/iaas/Content/GSG/Tasks/choosingcompartments.htm).
 
-> Ensure a default compute zone and region have been set as described in the [Prerequisites](01-prerequisites.md#set-a-default-compute-region-and-zone) lab.
+> Ensure the region has been set as described in the [Prerequisites](01-prerequisites.md#set-a-default-region) lab.
+
+> Ensure the [compartment](https://docs.cloud.oracle.com/en-us/iaas/Content/Identity/Tasks/managingcompartments.htm) has been created and you have the permissions in it.
 
 ## Networking
 
@@ -10,14 +12,17 @@ The Kubernetes [networking model](https://kubernetes.io/docs/concepts/cluster-ad
 
 > Setting up network policies is out of scope for this tutorial.
 
-### Virtual Private Cloud Network
+### Virtual Cloud Network
 
-In this section a dedicated [Virtual Private Cloud](https://cloud.google.com/compute/docs/networks-and-firewalls#networks) (VPC) network will be setup to host the Kubernetes cluster.
+In this section a dedicated [Virtual Cloud Network]() (VCN) will be setup to host the Kubernetes cluster.
 
-Create the `kubernetes-the-hard-way` custom VPC network:
+Create the `kubernetes-the-hard-way-oci` custom VCN:
 
 ```
-gcloud compute networks create kubernetes-the-hard-way --subnet-mode custom
+oci network vcn create --compartment-id <Compartment OCID> \
+  --display-name kubernetes-the-hard-way \
+  --dns-label thehardway \
+  --cidr-block 10.240.0.0/24
 ```
 
 A [subnet](https://cloud.google.com/compute/docs/vpc/#vpc_networks_and_subnets) must be provisioned with an IP address range large enough to assign a private IP address to each node in the Kubernetes cluster.
@@ -25,31 +30,32 @@ A [subnet](https://cloud.google.com/compute/docs/vpc/#vpc_networks_and_subnets) 
 Create the `kubernetes` subnet in the `kubernetes-the-hard-way` VPC network:
 
 ```
-gcloud compute networks subnets create kubernetes \
-  --network kubernetes-the-hard-way \
-  --range 10.240.0.0/24
+oci network subnet create --compartment-id <Compartment OCID> \
+  --vcn-id <VCN OCID> \
+  --display-name kubernetes \
+  --cidr-block 10.240.0.0/24
 ```
 
 > The `10.240.0.0/24` IP address range can host up to 254 compute instances.
 
-### Firewall Rules
-
-Create a firewall rule that allows internal communication across all protocols:
-
+Create an internet gateway that allows internet access:
 ```
-gcloud compute firewall-rules create kubernetes-the-hard-way-allow-internal \
-  --allow tcp,udp,icmp \
-  --network kubernetes-the-hard-way \
-  --source-ranges 10.240.0.0/24,10.200.0.0/16
+oci network internet-gateway create \
+  --compartment-id <Compartment OCID> \
+  --vcn-id <VCN OCID> \
+  --is-enabled true \
+  --display-name kubernetes-the-hard-way-internet
 ```
 
-Create a firewall rule that allows external SSH, ICMP, and HTTPS:
+### Security List
+
+Create a security list that allows internal communication across all protocols, and external SSH, ICMP, and HTTPS(kubernetes API server):
 
 ```
-gcloud compute firewall-rules create kubernetes-the-hard-way-allow-external \
-  --allow tcp:22,tcp:6443,icmp \
-  --network kubernetes-the-hard-way \
-  --source-ranges 0.0.0.0/0
+oci network security-list create --display-name kubernetes-the-hard-way-rules --compartment-id $C --vcn-id $VCN  \
+  --egress-security-rules '[{"destination": "0.0.0.0/0", "destinationType": "CIDR_BLOCK", "protocol": "all", "isStateless": false}]' \
+  --ingress-security-rules '[{"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 6, "isStateless": false, "tcpOptions": {"destinationPortRange": {"max": 22, "min": 22}}},  {"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 1, "isStateless": false}, {"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 6, "isStateless": false, "tcpOptions": {"destinationPortRange": {"max": 6443, "min": 6443}}}, {"source": "10.240.0.0/24", "sourceType": "CIDR_BLOCK", "protocol": "all", "isStateless": false}, {"source": "10.200.0.0/16", "sourceType": "CIDR_BLOCK", "protocol": "all", "isStateless": false}]'
+
 ```
 
 > An [external load balancer](https://cloud.google.com/compute/docs/load-balancing/network/) will be used to expose the Kubernetes API Servers to remote clients.
@@ -141,7 +147,7 @@ done
 
 ### Verification
 
-List the compute instances in your default compute zone:
+List the compute instances in your default region and specified compartment:
 
 ```
 gcloud compute instances list
