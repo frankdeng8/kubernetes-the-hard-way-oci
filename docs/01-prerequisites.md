@@ -16,9 +16,15 @@ Verify the OCI CLI version:
 oci --version
 ```
 
+<<<<<<< HEAD
 ### Set a Default Compute Region and Zone
 
 This tutorial assumes a default compute region and zone have been configured.
+=======
+### Set a Default Region
+
+This tutorial assumes a default [region](https://docs.cloud.oracle.com/en-us/iaas/Content/General/Concepts/regions.htm) has been configured.
+>>>>>>> 8c2c553ebab0784f5afaf6d8e077d04602153ab6
 
 If you are using the `oci` command-line tool for the first time `oci setup config` is the easiest way to do this:
 
