@@ -9,8 +9,6 @@ In this section you will provision a Certificate Authority that can be used to g
 Generate the CA configuration file, certificate, and private key:
 
 ```
-{
-
 cat > ca-config.json <<EOF
 {
   "signing": {
@@ -27,6 +25,12 @@ cat > ca-config.json <<EOF
 }
 EOF
 
+# CN: CommonName
+# OU: OrganizationalUnit
+# O: Organization
+# L: Locality
+# S: StateOrProvinceName
+# C: CountryName
 cat > ca-csr.json <<EOF
 {
   "CN": "Kubernetes",
@@ -47,8 +51,6 @@ cat > ca-csr.json <<EOF
 EOF
 
 cfssl gencert -initca ca-csr.json | cfssljson -bare ca
-
-}
 ```
 
 Results:
@@ -67,8 +69,6 @@ In this section you will generate client and server certificates for each Kubern
 Generate the `admin` client certificate and private key:
 
 ```
-{
-
 cat > admin-csr.json <<EOF
 {
   "CN": "admin",
@@ -94,8 +94,6 @@ cfssl gencert \
   -config=ca-config.json \
   -profile=kubernetes \
   admin-csr.json | cfssljson -bare admin
-
-}
 ```
 
 Results:
@@ -113,7 +111,7 @@ Generate a certificate and private key for each Kubernetes worker node:
 
 ```
 for instance in worker-0 worker-1 worker-2; do
-cat > ${instance}-csr.json <<EOF
+  cat > ${instance}-csr.json <<EOF
 {
   "CN": "system:node:${instance}",
   "key": {
@@ -132,17 +130,18 @@ cat > ${instance}-csr.json <<EOF
 }
 EOF
 
-EXTERNAL_IP=$(gcloud compute instances describe ${instance} \
-  --format 'value(networkInterfaces[0].accessConfigs[0].natIP)')
+instance_id=$(oci compute instance list \
+  --compartment-id $C --raw-output \
+  --query "data[?\"display-name\" == '$instance'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
 
-INTERNAL_IP=$(gcloud compute instances describe ${instance} \
-  --format 'value(networkInterfaces[0].networkIP)')
+public_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+private_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."private-ip"')
 
 cfssl gencert \
   -ca=ca.pem \
   -ca-key=ca-key.pem \
   -config=ca-config.json \
-  -hostname=${instance},${EXTERNAL_IP},${INTERNAL_IP} \
+  -hostname=${instance},${public_ip},${private_ip} \
   -profile=kubernetes \
   ${instance}-csr.json | cfssljson -bare ${instance}
 done
