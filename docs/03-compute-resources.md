@@ -41,6 +41,7 @@ Create the `kubernetes` subnet in the `kubernetes-the-hard-way` VPC network:
 S=$(oci network subnet create --compartment-id $C \
   --vcn-id $V \
   --display-name kubernetes \
+  --dns-label kubernetes \
   --cidr-block 10.240.0.0/24 \
   --raw-output --query 'data.id')
 echo $S
@@ -297,7 +298,7 @@ done
 List the compute instances in your default region and specified compartment:
 
 ```
-oci compute instance list --compartment-id $C --output table --query 'data [].{NAME:"display-name", AD: "availability-domain", SHAPE: "Shape", STATUS: "lifecycle-state"}'
+oci compute instance list --compartment-id $C --output table --query 'data [].{NAME:"display-name", AD: "availability-domain", SHAPE: "shape", STATUS: "lifecycle-state"}'
 ```
 
 > output

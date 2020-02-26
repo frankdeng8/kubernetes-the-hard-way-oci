@@ -130,20 +130,24 @@ for instance in worker-0 worker-1 worker-2; do
 }
 EOF
 
-instance_id=$(oci compute instance list \
-  --compartment-id $C --raw-output \
-  --query "data[?\"display-name\" == '$instance'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
+  instance_id=$(oci compute instance list \
+    --compartment-id $C --raw-output \
+    --query "data[?\"display-name\" == '$instance'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
 
-public_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
-private_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."private-ip"')
+  echo $instance_id
 
-cfssl gencert \
-  -ca=ca.pem \
-  -ca-key=ca-key.pem \
-  -config=ca-config.json \
-  -hostname=${instance},${public_ip},${private_ip} \
-  -profile=kubernetes \
-  ${instance}-csr.json | cfssljson -bare ${instance}
+  public_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+  echo $public_ip
+  private_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."private-ip"')
+  echo $private_ip
+
+  cfssl gencert \
+    -ca=ca.pem \
+    -ca-key=ca-key.pem \
+    -config=ca-config.json \
+    -hostname=${instance},${public_ip},${private_ip} \
+    -profile=kubernetes \
+    ${instance}-csr.json | cfssljson -bare ${instance}
 done
 ```
 
@@ -163,8 +167,6 @@ worker-2.pem
 Generate the `kube-controller-manager` client certificate and private key:
 
 ```
-{
-
 cat > kube-controller-manager-csr.json <<EOF
 {
   "CN": "system:kube-controller-manager",
@@ -191,7 +193,6 @@ cfssl gencert \
   -profile=kubernetes \
   kube-controller-manager-csr.json | cfssljson -bare kube-controller-manager
 
-}
 ```
 
 Results:
@@ -207,8 +208,6 @@ kube-controller-manager.pem
 Generate the `kube-proxy` client certificate and private key:
 
 ```
-{
-
 cat > kube-proxy-csr.json <<EOF
 {
   "CN": "system:kube-proxy",
@@ -235,7 +234,6 @@ cfssl gencert \
   -profile=kubernetes \
   kube-proxy-csr.json | cfssljson -bare kube-proxy
 
-}
 ```
 
 Results:
@@ -250,8 +248,6 @@ kube-proxy.pem
 Generate the `kube-scheduler` client certificate and private key:
 
 ```
-{
-
 cat > kube-scheduler-csr.json <<EOF
 {
   "CN": "system:kube-scheduler",
@@ -277,8 +273,6 @@ cfssl gencert \
   -config=ca-config.json \
   -profile=kubernetes \
   kube-scheduler-csr.json | cfssljson -bare kube-scheduler
-
-}
 ```
 
 Results:
@@ -296,8 +290,6 @@ The `kubernetes-the-hard-way` static IP address will be included in the list of 
 Generate the Kubernetes API Server certificate and private key:
 
 ```
-{
-
 KUBERNETES_PUBLIC_ADDRESS=$(gcloud compute addresses describe kubernetes-the-hard-way \
   --region $(gcloud config get-value compute/region) \
   --format 'value(address)')
@@ -330,8 +322,6 @@ cfssl gencert \
   -hostname=10.32.0.1,10.240.0.10,10.240.0.11,10.240.0.12,${KUBERNETES_PUBLIC_ADDRESS},127.0.0.1,${KUBERNETES_HOSTNAMES} \
   -profile=kubernetes \
   kubernetes-csr.json | cfssljson -bare kubernetes
-
-}
 ```
 
 > The Kubernetes API server is automatically assigned the `kubernetes` internal dns name, which will be linked to the first IP address (`10.32.0.1`) from the address range (`10.32.0.0/24`) reserved for internal cluster services during the [control plane bootstrapping](08-bootstrapping-kubernetes-controllers.md#configure-the-kubernetes-api-server) lab.
