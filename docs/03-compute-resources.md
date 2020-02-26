@@ -6,7 +6,7 @@ Kubernetes requires a set of machines to host the Kubernetes control plane and t
 
 > Ensure the [compartment](https://docs.cloud.oracle.com/en-us/iaas/Content/Identity/Tasks/managingcompartments.htm) has been created and you have the permissions in it.
 
-Get the compartment OCID:
+Find the compartment OCID:
 ```
 C=$(oci iam compartment list --raw-output --query 'data[0].id')
 echo $C
@@ -60,7 +60,7 @@ I=$(oci network internet-gateway create \
 echo $I
 ```
 
-Get the default routing table:
+Find the default routing table:
 ```
 R=$(oci network route-table list --compartment-id $C --vcn-id $V --raw-output --query 'data[0].id')
 echo $R
@@ -75,7 +75,7 @@ oci network route-table update \
 
 ### Security List
 
-Get the default security list:
+Find the default security list:
 ```
 SL=$(oci network security-list list \
   --compartment-id $C \
