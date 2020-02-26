@@ -321,7 +321,7 @@ oci compute instance list --compartment-id $C --output table --query 'data [].{N
 
 Log into the `controller-0` instance:
 ```
-ssh opc@<controller-0 publich IP>
+ssh opc@<controller-0 public IP>
 ```
 
 Next: [Provisioning a CA and Generating TLS Certificates](04-certificate-authority.md)
