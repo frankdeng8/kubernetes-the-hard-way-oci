@@ -36,7 +36,11 @@ Copy the `encryption-config.yaml` encryption config file to each controller inst
 
 ```
 for instance in controller-0 controller-1 controller-2; do
-  gcloud compute scp encryption-config.yaml ${instance}:~/
+  instance_id=$(oci compute instance list \
+    --compartment-id $C --raw-output \
+    --query "data[?\"display-name\" == '$instance'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
+  public_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+  scp encryption-config.yaml opc@$public_ip:~
 done
 ```
 
