@@ -25,52 +25,58 @@ In this section a dedicated [Virtual Cloud Network]() (VCN) will be setup to hos
 Create the `kubernetes-the-hard-way` custom VCN:
 
 ```
-V=$(oci network vcn create --compartment-id $C \
+VCN=$(oci network vcn create --compartment-id $C \
   --display-name kubernetes-the-hard-way \
   --dns-label thehardway \
-  --cidr-block 10.240.0.0/24 \
+  --cidr-block 10.240.0.0/16 \
   --raw-output --query 'data.id')
-echo $V
+echo $VCN
 ```
+
+### Subnet
 
 A [subnet](https://cloud.google.com/compute/docs/vpc/#vpc_networks_and_subnets) must be provisioned with an IP address range large enough to assign a private IP address to each node in the Kubernetes cluster.
 
-Create the `kubernetes` subnet in the `kubernetes-the-hard-way` VPC network:
+Create the `kubernetes` regional subnet in the `kubernetes-the-hard-way` VCN:
 
 ```
-S=$(oci network subnet create --compartment-id $C \
-  --vcn-id $V \
-  --display-name kubernetes \
+SUBNET=$(oci network subnet create --compartment-id $C \
+  --vcn-id $VCN \
+  --display-name kubernetes-subnet \
   --dns-label kubernetes \
   --cidr-block 10.240.0.0/24 \
   --raw-output --query 'data.id')
-echo $S
+echo $SUBNET
 ```
 
 > The `10.240.0.0/24` IP address range can host up to 254 compute instances.
 
+### Internet Gateway
+
 Create an internet gateway that allows internet access:
 ```
-I=$(oci network internet-gateway create \
+IGW=$(oci network internet-gateway create \
   --compartment-id $C \
-  --vcn-id $V \
+  --vcn-id $VCN \
   --is-enabled true \
-  --display-name kubernetes-the-hard-way-internet-gw \
+  --display-name kubernetes-igw \
   --raw-output --query 'data.id')
-echo $I
+echo $IGW
 ```
+
+### Routing table
 
 Find the default routing table:
 ```
-R=$(oci network route-table list --compartment-id $C --vcn-id $V --raw-output --query 'data[0].id')
-echo $R
+RT=$(oci network route-table list --compartment-id $C --vcn-id $VCN --raw-output --query 'data[0].id')
+echo $RT
 ```
 Add a routing rule to the default routing table:
 ```
 oci network route-table update \
-  --rt-id $R \
+  --rt-id $RT \
   --force \
-  --route-rules "[{\"cidrBlock\": \"0.0.0.0/0\", \"networkEntityId\": \"$I\"}]"
+  --route-rules "[{\"cidrBlock\": \"0.0.0.0/0\", \"networkEntityId\": \"$IGW\"}]"
 ```
 
 ### Security List
@@ -79,7 +85,7 @@ Find the default security list:
 ```
 SL=$(oci network security-list list \
   --compartment-id $C \
-  --vcn-id $V \
+  --vcn-id $VCN \
   --raw-output --query 'data[0].id')
 echo $SL
 ```
@@ -91,10 +97,9 @@ oci network security-list update \
   --security-list-id $SL \
   --egress-security-rules '[{"destination": "0.0.0.0/0", "destinationType": "CIDR_BLOCK", "protocol": "all", "isStateless": false}]' \
   --ingress-security-rules '[{"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 6, "isStateless": false, "tcpOptions": {"destinationPortRange": {"max": 22, "min": 22}}},  {"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 1, "isStateless": false}, {"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 6, "isStateless": false, "tcpOptions": {"destinationPortRange": {"max": 6443, "min": 6443}}}, {"source": "10.240.0.0/24", "sourceType": "CIDR_BLOCK", "protocol": "all", "isStateless": false}, {"source": "10.200.0.0/16", "sourceType": "CIDR_BLOCK", "protocol": "all", "isStateless": false}]'
-
 ```
 
-List the security rules in the `kubernetes-the-hard-way` VPC network:
+List the default security rules in the `kubernetes-the-hard-way` VCN:
 
 ```
 oci network security-list get --security-list-id $SL
@@ -195,35 +200,12 @@ oci network security-list get --security-list-id $SL
 
 ```
 
-### Kubernetes Public IP Address
-
-Allocate a static IP address that will be attached to the external load balancer fronting the Kubernetes API Servers:
-
-```
-gcloud compute addresses create kubernetes-the-hard-way \
-  --region $(gcloud config get-value compute/region)
-```
-
-Verify the `kubernetes-the-hard-way` static IP address was created in your default compute region:
-
-```
-gcloud compute addresses list --filter="name=('kubernetes-the-hard-way')"
-```
-
-> output
-
-```
-NAME                     REGION    ADDRESS        STATUS
-kubernetes-the-hard-way  us-west1  XX.XXX.XXX.XX  RESERVED
-```
-
 ## Compute Instances
 
 The compute instances in this lab will be provisioned using [Oracle Linux](https://www.oracle.com/linux/) 7, which has good support for the [containerd container runtime](https://github.com/containerd/containerd). Each compute instance will be provisioned with a fixed private IP address and a fixed public IP address to simplify the Kubernetes bootstrapping process.
 
 List and choose latest Oracle Linux 7 image:
 ```
-
 IMG=$(oci compute image list \
   --compartment-id $C \
   --operating-system "Oracle Linux" \
@@ -242,6 +224,8 @@ List and choose the availability domain:
 ```
 AD=$(oci iam availability-domain list --raw-output --query 'data[0].name')
 echo $AD
+AD_PREFIX=${AD%-?}
+echo $AD_PREFIX
 ```
 Create an [SSH key pair](https://docs.cloud.oracle.com/en-us/iaas/Content/Compute/Tasks/managingkeypairs.htm) to connect to instances:
 ```
@@ -250,18 +234,18 @@ ssh-keygen -t rsa -N "" -b 4096
 
 ### Kubernetes Controllers
 
-Create three compute instances which will host the Kubernetes control plane:
+Create three compute instances which will host the Kubernetes control plane in three Availability Domains:
 
 ```
 for i in 0 1 2; do
   oci compute instance launch \
-    --availability-domain $AD \
+    --availability-domain ${AD_PREFIX}-$((i+1)) \
     --compartment-id $C \
     --display-name controller-${i} \
     --freeform-tags '{"kubernetes": "controller"}' \
     --image-id $IMG \
     --shape VM.Standard.E2.1 \
-    --subnet-id $S \
+    --subnet-id $SUBNET \
     --private-ip 10.240.0.1${i} \
     --assign-public-ip true \
     --ssh-authorized-keys-file ~/.ssh/id_rsa.pub
@@ -279,17 +263,16 @@ Create three compute instances which will host the Kubernetes worker nodes:
 ```
 for i in 0 1 2; do
   oci compute instance launch \
-    --availability-domain $AD \
     --compartment-id $C \
+    --availability-domain ${AD_PREFIX}-$((i+1)) \
     --display-name worker-${i} \
     --freeform-tags '{"kubernetes": "worker"}' \
     --image-id $IMG \
     --shape VM.Standard.E2.1 \
-    --subnet-id $S \
+    --subnet-id $SUBNET \
     --private-ip 10.240.0.2${i} \
     --assign-public-ip true \
     --ssh-authorized-keys-file ~/.ssh/id_rsa.pub
-  }
 done
 ```
 
@@ -298,7 +281,9 @@ done
 List the compute instances in your default region and specified compartment:
 
 ```
-oci compute instance list --compartment-id $C --output table --query 'data [].{NAME:"display-name", AD: "availability-domain", SHAPE: "shape", STATUS: "lifecycle-state"}'
+oci compute instance list --compartment-id $C \
+  --output table \
+  --query 'data [].{NAME:"display-name", AD: "availability-domain", SHAPE: "shape", STATUS: "lifecycle-state"}'
 ```
 
 > output
@@ -308,20 +293,103 @@ oci compute instance list --compartment-id $C --output table --query 'data [].{N
 | AD                   | NAME         | SHAPE | STATUS     |
 +----------------------+--------------+-------+------------+
 | nzlf:US-ASHBURN-AD-1 | controller-0 | None  | RUNNING    |
-| nzlf:US-ASHBURN-AD-1 | controller-1 | None  | RUNNING    |
-| nzlf:US-ASHBURN-AD-1 | controller-2 | None  | RUNNING    |
+| nzlf:US-ASHBURN-AD-2 | controller-1 | None  | RUNNING    |
+| nzlf:US-ASHBURN-AD-3 | controller-2 | None  | RUNNING    |
 | nzlf:US-ASHBURN-AD-1 | worker-0     | None  | RUNNING    |
-| nzlf:US-ASHBURN-AD-1 | worker-1     | None  | RUNNING    |
-| nzlf:US-ASHBURN-AD-1 | worker-2     | None  | RUNNING    |
+| nzlf:US-ASHBURN-AD-2 | worker-1     | None  | RUNNING    |
+| nzlf:US-ASHBURN-AD-3 | worker-2     | None  | RUNNING    |
 +----------------------+--------------+-------+------------+
 ```
 
-## Verifying SSH Access
+### Verifying SSH Access
 
 
 Log into the `controller-0` instance:
 ```
 ssh opc@<controller-0 public IP>
 ```
+
+## Load balancer for Kubernetes
+### Security list, subnet for Kubernetes laod balancer
+
+Create a Load Balancer fronting the Kubernetes API Servers.
+
+Create a security list for load balancer in `Kubernetes-the-hard-way` VCN, allow ingress traffice for Kubernetes API server port 6443 and all egress traffic.
+
+```
+LB_SE=$(oci network security-list create \
+  --display-name kubernetes-lb \
+  --compartment-id $C \
+  --vcn-id $VCN \
+  --egress-security-rules '[{"destination": "0.0.0.0/0", "destinationType": "CIDR_BLOCK", "protocol": "all", "isStateless": false}]' \
+  --ingress-security-rules '[{"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 6, "isStateless": false, "tcpOptions": {"destinationPortRange": {"max": 6443, "min": 6443}}} ]' \
+  --raw-output --query 'data.id')
+echo $LB_SE
+```
+Create the `kubernetes-lb` regional subnet for the load balancer in the `kubernetes-the-hard-way` VCN:
+
+```
+LB_SUBNET=$(oci network subnet create --compartment-id $C \
+  --vcn-id $VCN \
+  --display-name kubernetes-lb \
+  --dns-label kuberneteslb \
+  --security-list-ids "[\"$LB_SE\"]" \
+  --cidr-block 10.240.10.0/24 \
+  --raw-output --query 'data.id')
+echo $LB_SUBNET
+```
+Create a Load Balancer:
+
+```
+oci lb load-balancer create --compartment-id $C \
+  --display-name kubernetes-lb \
+  --shape-name 100Mbps \
+  --subnet-ids "[\"$LB_SUBNET\"]"
+```
+Find the Load Balancer ID:
+```
+LB=$(oci lb load-balancer list --compartment-id $C \
+  --raw-output --query "data [?\"display-name\" == 'kubernetes-lb']|[0].\"id\"")
+```
+
+Create Load Blancer backend-set:
+```
+oci lb backend-set create \
+  --policy ROUND_ROBIN --name kubernetes-backend-set \
+  --load-balancer-id $LB \
+  --health-checker-protocol TCP \
+  --health-checker-port 6443
+
+```
+
+Create Load Balancer backends:
+```
+for i in 0 1 2; do
+  oci lb backend create \
+    --load-balancer-id $LB --backend-set-name kubernetes-backend-set \
+    --ip-address 10.240.0.1$i --port 6443
+done
+```
+
+Create Load Balancer listener:
+```
+oci lb listener create \
+  --name kubernetes-listener --load-balancer-id $LB \
+  --default-backend-set-name kubernetes-backend-set \
+  --port 6443 --protocol TCP
+```
+
+List the Load Balancer:
+```
+oci lb load-balancer get --load-balancer-id $LB
+```
+
+Find the public IP address that will be attached to the external load balancer fronting the Kubernetes API Servers:
+```
+LB_IP=$(oci lb load-balancer get --load-balancer-id $LB \
+  --raw-output --query 'data."ip-addresses"|[0]."ip-address"')
+echo $LB_IP
+```
+Verify the `kubernetes-the-hard-way` static IP address was created in your default compute region:
 
 Next: [Provisioning a CA and Generating TLS Certificates](04-certificate-authority.md)
