@@ -6,7 +6,7 @@ Kubernetes requires a set of machines to host the Kubernetes control plane and t
 
 > Ensure the [compartment](https://docs.cloud.oracle.com/en-us/iaas/Content/Identity/Tasks/managingcompartments.htm) has been created and you have the permissions in it.
 
-Find the compartment OCID:
+Retrieve the compartment OCID:
 ```
 C=$(oci iam compartment list --raw-output --query 'data[0].id')
 echo $C
@@ -309,10 +309,10 @@ Log into the `controller-0` instance:
 ssh opc@<controller-0 public IP>
 ```
 
-## Kubernetes Public IP Address(Load balancer)
+## Kubernetes Public IP Address(Public Load balancer)
 
-Create a load balancer fronting the Kubernetes API Servers.
-The load balancer static IP address will be the public IP address for Kubernetes.
+Create a public load balancer fronting the Kubernetes API Servers.
+The public IP address of the load balancer will be the public IP address for Kubernetes.
 
 ### Security list
 
@@ -341,16 +341,17 @@ LB_SUBNET=$(oci network subnet create --compartment-id $C \
   --raw-output --query 'data.id')
 echo $LB_SUBNET
 ```
-### Load Balancer
-Create a Load Balancer:
+### Public Load Balancer
+Create a Public Load Balancer:
 
 ```
 oci lb load-balancer create --compartment-id $C \
   --display-name kubernetes-lb \
+  --is-private false \
   --shape-name 100Mbps \
   --subnet-ids "[\"$LB_SUBNET\"]"
 ```
-Find the Load Balancer ID:
+Retrieve the Load Balancer ID:
 ```
 LB=$(oci lb load-balancer list --compartment-id $C \
   --raw-output --query "data [?\"display-name\" == 'kubernetes-lb']|[0].\"id\"")
@@ -389,11 +390,11 @@ List the Load Balancer:
 oci lb load-balancer get --load-balancer-id $LB
 ```
 
-Find the public IP address of the load balancer fronting the Kubernetes API Servers:
+Retrieve the public IP address of the load balancer fronting the Kubernetes API Servers:
 ```
-LB_IP=$(oci lb load-balancer get --load-balancer-id $LB \
+KUBERNETES_PUBLIC_ADDRESS=$(oci lb load-balancer get --load-balancer-id $LB \
   --raw-output --query 'data."ip-addresses"|[0]."ip-address"')
-echo $LB_IP
+echo $KUBERNETES_PUBLIC_ADDRESS
 ```
 
 Next: [Provisioning a CA and Generating TLS Certificates](04-certificate-authority.md)

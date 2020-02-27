@@ -290,12 +290,16 @@ The `kubernetes-the-hard-way` public IP address(Load Balance IP address) will be
 Generate the Kubernetes API Server certificate and private key:
 
 ```
+KUBERNETES_PUBLIC_ADDRESS=$(oci lb load-balancer get --load-balancer-id $LB \
+  --raw-output --query 'data."ip-addresses"|[0]."ip-address"')
+
 kubernetes_hostnames=kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.svc.cluster.local
 
 cat > kubernetes-csr.json <<EOF
 {
   "CN": "kubernetes",
   "key": {
+
     "algo": "rsa",
     "size": 2048
   },
@@ -315,7 +319,7 @@ cfssl gencert \
   -ca=ca.pem \
   -ca-key=ca-key.pem \
   -config=ca-config.json \
-  -hostname=10.32.0.1,10.240.0.10,10.240.0.11,10.240.0.12,$LB_IP,127.0.0.1,$kubernetes_hostnames \
+  -hostname=10.32.0.1,10.240.0.10,10.240.0.11,10.240.0.12,$KUBERNETES_PUBLIC_ADDRESS,127.0.0.1,$kubernetes_hostnames \
   -profile=kubernetes \
   kubernetes-csr.json | cfssljson -bare kubernetes
 ```
