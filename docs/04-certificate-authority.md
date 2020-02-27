@@ -41,10 +41,10 @@ cat > ca-csr.json <<EOF
   "names": [
     {
       "C": "US",
-      "L": "Portland",
+      "L": "Redwood Shores",
       "O": "Kubernetes",
       "OU": "CA",
-      "ST": "Oregon"
+      "ST": "California"
     }
   ]
 }
@@ -79,10 +79,10 @@ cat > admin-csr.json <<EOF
   "names": [
     {
       "C": "US",
-      "L": "Portland",
+      "L": "Redwood Shores",
       "O": "system:masters",
       "OU": "Kubernetes The Hard Way",
-      "ST": "Oregon"
+      "ST": "California"
     }
   ]
 }
@@ -121,10 +121,10 @@ for instance in worker-0 worker-1 worker-2; do
   "names": [
     {
       "C": "US",
-      "L": "Portland",
+      "L": "Redwood Shores",
       "O": "system:nodes",
       "OU": "Kubernetes The Hard Way",
-      "ST": "Oregon"
+      "ST": "California"
     }
   ]
 }
@@ -177,10 +177,10 @@ cat > kube-controller-manager-csr.json <<EOF
   "names": [
     {
       "C": "US",
-      "L": "Portland",
+      "L": "Redwood Shores",
       "O": "system:kube-controller-manager",
       "OU": "Kubernetes The Hard Way",
-      "ST": "Oregon"
+      "ST": "California"
     }
   ]
 }
@@ -218,10 +218,10 @@ cat > kube-proxy-csr.json <<EOF
   "names": [
     {
       "C": "US",
-      "L": "Portland",
+      "L": "Redwood Shores",
       "O": "system:node-proxier",
       "OU": "Kubernetes The Hard Way",
-      "ST": "Oregon"
+      "ST": "California"
     }
   ]
 }
@@ -258,10 +258,10 @@ cat > kube-scheduler-csr.json <<EOF
   "names": [
     {
       "C": "US",
-      "L": "Portland",
+      "L": "Redwood Shores",
       "O": "system:kube-scheduler",
       "OU": "Kubernetes The Hard Way",
-      "ST": "Oregon"
+      "ST": "California"
     }
   ]
 }
@@ -302,10 +302,10 @@ cat > kubernetes-csr.json <<EOF
   "names": [
     {
       "C": "US",
-      "L": "Portland",
+      "L": "Redwood Shores",
       "O": "Kubernetes",
       "OU": "Kubernetes The Hard Way",
-      "ST": "Oregon"
+      "ST": "California"
     }
   ]
 }
@@ -346,10 +346,10 @@ cat > service-account-csr.json <<EOF
   "names": [
     {
       "C": "US",
-      "L": "Portland",
+      "L": "Redwood Shores",
       "O": "Kubernetes",
       "OU": "Kubernetes The Hard Way",
-      "ST": "Oregon"
+      "ST": "California"
     }
   ]
 }
