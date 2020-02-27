@@ -309,9 +309,10 @@ Log into the `controller-0` instance:
 ssh opc@<controller-0 public IP>
 ```
 
-## Load balancer for Kubernetes
+## Kubernetes Public IP Address(Load balancer)
 
-Create a Load Balancer fronting the Kubernetes API Servers.
+Create a load balancer fronting the Kubernetes API Servers.
+The load balancer static IP address will be the public IP address for Kubernetes.
 
 ### Security list
 
@@ -353,6 +354,7 @@ Find the Load Balancer ID:
 ```
 LB=$(oci lb load-balancer list --compartment-id $C \
   --raw-output --query "data [?\"display-name\" == 'kubernetes-lb']|[0].\"id\"")
+echo $LB
 ```
 
 Create Load Blancer backend-set:
@@ -387,7 +389,7 @@ List the Load Balancer:
 oci lb load-balancer get --load-balancer-id $LB
 ```
 
-Find the public IP address that will be attached to the external load balancer fronting the Kubernetes API Servers:
+Find the public IP address of the load balancer fronting the Kubernetes API Servers:
 ```
 LB_IP=$(oci lb load-balancer get --load-balancer-id $LB \
   --raw-output --query 'data."ip-addresses"|[0]."ip-address"')

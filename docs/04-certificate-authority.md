@@ -285,28 +285,12 @@ kube-scheduler.pem
 
 ### The Kubernetes API Server Certificate
 
-The `kubernetes-the-hard-way` static IP address will be included in the list of subject alternative names for the Kubernetes API Server certificate. This will ensure the certificate can be validated by remote clients.
+The `kubernetes-the-hard-way` public IP address(Load Balance IP address) will be included in the list of subject alternative names for the Kubernetes API Server certificate. This will ensure the certificate can be validated by remote clients.
 
 Generate the Kubernetes API Server certificate and private key:
 
 ```
-public_addresses=""
-private_addresses=""
-for instance in controller-0 controller-1 controller-2; do
-  instance_id=$(oci compute instance list \
-    --compartment-id $C --raw-output \
-    --query "data[?\"display-name\" == '$instance'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
-  public_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
-  public_addresses="$public_ip,$public_addresses"
-  private_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."private-ip"')
-  private_addresses="$private_ip,$private_addresses"
-done
-
 kubernetes_hostnames=kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.svc.cluster.local
-
-echo "$public_addresses"
-echo "$private_addresses"
-echo "$kubernetes_hostnames"
 
 cat > kubernetes-csr.json <<EOF
 {
@@ -331,7 +315,7 @@ cfssl gencert \
   -ca=ca.pem \
   -ca-key=ca-key.pem \
   -config=ca-config.json \
-  -hostname=10.32.0.1,${private_addresses}${public_addresses}127.0.0.1,$kubernetes_hostnames \
+  -hostname=10.32.0.1,10.240.0.10,10.240.0.11,10.240.0.12,$LB_IP,127.0.0.1,$kubernetes_hostnames \
   -profile=kubernetes \
   kubernetes-csr.json | cfssljson -bare kubernetes
 ```
