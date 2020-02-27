@@ -289,16 +289,16 @@ oci compute instance list --compartment-id $C \
 > output
 
 ```
-+----------------------+--------------+-------+------------+
-| AD                   | NAME         | SHAPE | STATUS     |
-+----------------------+--------------+-------+------------+
-| nzlf:US-ASHBURN-AD-1 | controller-0 | None  | RUNNING    |
-| nzlf:US-ASHBURN-AD-2 | controller-1 | None  | RUNNING    |
-| nzlf:US-ASHBURN-AD-3 | controller-2 | None  | RUNNING    |
-| nzlf:US-ASHBURN-AD-1 | worker-0     | None  | RUNNING    |
-| nzlf:US-ASHBURN-AD-2 | worker-1     | None  | RUNNING    |
-| nzlf:US-ASHBURN-AD-3 | worker-2     | None  | RUNNING    |
-+----------------------+--------------+-------+------------+
++----------------------+--------------+------------------+------------+
+| AD                   | NAME         | SHAPE            | STATUS     |
++----------------------+--------------+------------------+------------+
+| nzlf:US-ASHBURN-AD-1 | controller-0 | VM.Standard.E2.1 | RUNNING    |
+| nzlf:US-ASHBURN-AD-1 | worker-0     | VM.Standard.E2.1 | RUNNING    |
+| nzlf:US-ASHBURN-AD-2 | controller-1 | VM.Standard.E2.1 | RUNNING    |
+| nzlf:US-ASHBURN-AD-2 | worker-1     | VM.Standard.E2.1 | RUNNING    |
+| nzlf:US-ASHBURN-AD-3 | controller-2 | VM.Standard.E2.1 | RUNNING    |
+| nzlf:US-ASHBURN-AD-3 | worker-2     | VM.Standard.E2.1 | RUNNING    |
++----------------------+--------------+------------------+------------+
 ```
 
 ### Verifying SSH Access
@@ -310,9 +310,10 @@ ssh opc@<controller-0 public IP>
 ```
 
 ## Load balancer for Kubernetes
-### Security list, subnet for Kubernetes laod balancer
 
 Create a Load Balancer fronting the Kubernetes API Servers.
+
+### Security list
 
 Create a security list for load balancer in `Kubernetes-the-hard-way` VCN, allow ingress traffice for Kubernetes API server port 6443 and all egress traffic.
 
@@ -326,6 +327,7 @@ LB_SE=$(oci network security-list create \
   --raw-output --query 'data.id')
 echo $LB_SE
 ```
+### Subnet
 Create the `kubernetes-lb` regional subnet for the load balancer in the `kubernetes-the-hard-way` VCN:
 
 ```
@@ -338,6 +340,7 @@ LB_SUBNET=$(oci network subnet create --compartment-id $C \
   --raw-output --query 'data.id')
 echo $LB_SUBNET
 ```
+### Load Balancer
 Create a Load Balancer:
 
 ```
@@ -390,6 +393,5 @@ LB_IP=$(oci lb load-balancer get --load-balancer-id $LB \
   --raw-output --query 'data."ip-addresses"|[0]."ip-address"')
 echo $LB_IP
 ```
-Verify the `kubernetes-the-hard-way` static IP address was created in your default compute region:
 
 Next: [Provisioning a CA and Generating TLS Certificates](04-certificate-authority.md)
