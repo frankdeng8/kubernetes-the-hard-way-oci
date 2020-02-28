@@ -313,7 +313,8 @@ oci lb backend-set create \
   --policy ROUND_ROBIN --name kubernetes-backend-set \
   --load-balancer-id $LB \
   --health-checker-protocol TCP \
-  --health-checker-port 6443
+  --health-checker-port 6443 \
+  --wait-for-state SUCCEEDED
 
 ```
 
@@ -322,7 +323,8 @@ Create Load Balancer backends:
 for i in 0 1 2; do
   oci lb backend create \
     --load-balancer-id $LB --backend-set-name kubernetes-backend-set \
-    --ip-address 10.240.0.1$i --port 6443
+    --ip-address 10.240.0.1$i --port 6443 \
+    --wait-for-state SUCCEEDED
 done
 ```
 
@@ -331,7 +333,8 @@ Create Load Balancer listener:
 oci lb listener create \
   --name kubernetes-listener --load-balancer-id $LB \
   --default-backend-set-name kubernetes-backend-set \
-  --port 6443 --protocol TCP
+  --port 6443 --protocol TCP \
+  --wait-for-state SUCCEEDED
 ```
 
 List the Load Balancer:

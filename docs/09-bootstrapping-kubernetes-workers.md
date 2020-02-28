@@ -53,9 +53,9 @@ sudo swapoff -a
 ```
 wget \
   https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.17.0/crictl-v1.17.0-linux-amd64.tar.gz \
+  https://github.com/containerd/containerd/releases/download/v1.3.3/containerd-1.3.3.linux-amd64.tar.gz \
   https://github.com/opencontainers/runc/releases/download/v1.0.0-rc10/runc.amd64 \
   https://github.com/containernetworking/plugins/releases/download/v0.8.5/cni-plugins-linux-amd64-v0.8.5.tgz \
-  https://github.com/containerd/containerd/releases/download/v1.2.13/containerd-1.2.13.linux-amd64.tar.gz \
   https://storage.googleapis.com/kubernetes-release/release/v1.17.3/bin/linux/amd64/kubectl \
   https://storage.googleapis.com/kubernetes-release/release/v1.17.3/bin/linux/amd64/kube-proxy \
   https://storage.googleapis.com/kubernetes-release/release/v1.17.3/bin/linux/amd64/kubelet
@@ -94,8 +94,7 @@ sudo mv kubectl kube-proxy kubelet runc crictl /usr/local/bin/
 Retrieve the Pod CIDR range for the current compute instance:
 
 ```
-POD_CIDR=$(curl -s -H "Metadata-Flavor: Google" \
-  http://metadata.google.internal/computeMetadata/v1/instance/attributes/pod-cidr)
+POD_CIDR=$(curl -s http://169.254.169.254/opc/v1/instance/metadata/user_data/pod-cidr)
 ```
 
 Create the `bridge` network configuration file:
@@ -181,11 +180,9 @@ EOF
 ### Configure the Kubelet
 
 ```
-{
-  sudo mv ${HOSTNAME}-key.pem ${HOSTNAME}.pem /var/lib/kubelet/
-  sudo mv ${HOSTNAME}.kubeconfig /var/lib/kubelet/kubeconfig
-  sudo mv ca.pem /var/lib/kubernetes/
-}
+sudo mv ${HOSTNAME}-key.pem ${HOSTNAME}.pem /var/lib/kubelet/
+sudo mv ${HOSTNAME}.kubeconfig /var/lib/kubelet/kubeconfig
+sudo mv ca.pem /var/lib/kubernetes/
 ```
 
 Create the `kubelet-config.yaml` configuration file:
@@ -285,11 +282,9 @@ EOF
 ### Start the Worker Services
 
 ```
-{
-  sudo systemctl daemon-reload
-  sudo systemctl enable containerd kubelet kube-proxy
-  sudo systemctl start containerd kubelet kube-proxy
-}
+sudo systemctl daemon-reload
+sudo systemctl enable containerd kubelet kube-proxy
+sudo systemctl start containerd kubelet kube-proxy
 ```
 
 > Remember to run the above commands on each worker node: `worker-0`, `worker-1`, and `worker-2`.
@@ -301,17 +296,22 @@ EOF
 List the registered Kubernetes nodes:
 
 ```
-gcloud compute ssh controller-0 \
-  --command "kubectl get nodes --kubeconfig admin.kubeconfig"
+instance_id=$(oci compute instance list \
+  --compartment-id $C --raw-output \
+  --query "data[?\"display-name\" == 'controller-0'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
+
+external_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+
+ssh opc@$external_ip "kubectl get nodes --kubeconfig admin.kubeconfig"
 ```
 
 > output
 
 ```
 NAME       STATUS   ROLES    AGE   VERSION
-worker-0   Ready    <none>   15s   v1.15.3
-worker-1   Ready    <none>   15s   v1.15.3
-worker-2   Ready    <none>   15s   v1.15.3
+worker-0   Ready    <none>   53m   v1.17.3
+worker-1   Ready    <none>   53m   v1.17.3
+worker-2   Ready    <none>   53m   v1.17.3
 ```
 
 Next: [Configuring kubectl for Remote Access](10-configuring-kubectl.md)
