@@ -309,14 +309,14 @@ Log into the `controller-0` instance:
 ssh opc@<controller-0 public IP>
 ```
 
-## Kubernetes Public IP Address(Public Load balancer)
+## Kubernetes Public IP Address from Public Load balancer
 
 Create a public load balancer fronting the Kubernetes API Servers.
 The public IP address of the load balancer will be the public IP address for Kubernetes.
 
 ### Security list
 
-Create a security list for load balancer in `Kubernetes-the-hard-way` VCN, allow ingress traffice for Kubernetes API server port 6443 and all egress traffic.
+Create a security list for load balancer in `Kubernetes-the-hard-way` VCN, allow ingress traffic for Kubernetes API server port 6443 and all egress traffic.
 
 ```
 LB_SE=$(oci network security-list create \
@@ -356,33 +356,6 @@ Retrieve the Load Balancer ID:
 LB=$(oci lb load-balancer list --compartment-id $C \
   --raw-output --query "data [?\"display-name\" == 'kubernetes-lb']|[0].\"id\"")
 echo $LB
-```
-
-Create Load Blancer backend-set:
-```
-oci lb backend-set create \
-  --policy ROUND_ROBIN --name kubernetes-backend-set \
-  --load-balancer-id $LB \
-  --health-checker-protocol TCP \
-  --health-checker-port 6443
-
-```
-
-Create Load Balancer backends:
-```
-for i in 0 1 2; do
-  oci lb backend create \
-    --load-balancer-id $LB --backend-set-name kubernetes-backend-set \
-    --ip-address 10.240.0.1$i --port 6443
-done
-```
-
-Create Load Balancer listener:
-```
-oci lb listener create \
-  --name kubernetes-listener --load-balancer-id $LB \
-  --default-backend-set-name kubernetes-backend-set \
-  --port 6443 --protocol TCP
 ```
 
 List the Load Balancer:

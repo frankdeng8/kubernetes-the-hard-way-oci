@@ -7,7 +7,13 @@ In this lab you will bootstrap three Kubernetes worker nodes. The following comp
 The commands in this lab must be run on each worker instance: `worker-0`, `worker-1`, and `worker-2`. Login to each worker instance using the `gcloud` command. Example:
 
 ```
-gcloud compute ssh worker-0
+instance_id=$(oci compute instance list \
+  --compartment-id $C --raw-output \
+  --query "data[?\"display-name\" == 'controller-0'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
+
+external_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+
+ssh opc@$external_ip
 ```
 
 ### Running commands in parallel with tmux

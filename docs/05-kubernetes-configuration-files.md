@@ -190,8 +190,8 @@ for instance in worker-0 worker-1 worker-2; do
   instance_id=$(oci compute instance list \
     --compartment-id $C --raw-output \
     --query "data[?\"display-name\" == '$instance'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
-  public_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
-  scp ${instance}.kubeconfig kube-proxy.kubeconfig opc@$public_ip:~
+  external_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+  scp ${instance}.kubeconfig kube-proxy.kubeconfig opc@$external_ip:~
 done
 ```
 
@@ -202,8 +202,8 @@ for instance in controller-0 controller-1 controller-2; do
   instance_id=$(oci compute instance list \
     --compartment-id $C --raw-output \
     --query "data[?\"display-name\" == '$instance'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
-  public_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
-  scp admin.kubeconfig kube-controller-manager.kubeconfig kube-scheduler.kubeconfig opc@$public_ip:~
+  external_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+  scp admin.kubeconfig kube-controller-manager.kubeconfig kube-scheduler.kubeconfig opc@$external_ip:~
 done
 ```
 

@@ -11,9 +11,9 @@ instance_id=$(oci compute instance list \
   --compartment-id $C --raw-output \
   --query "data[?\"display-name\" == 'controller-0'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
 
-public_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+external_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
 
-ssh opc@$public_ip
+ssh opc@$external_ip
 ```
 
 ### Running commands in parallel with tmux
@@ -94,7 +94,7 @@ ExecStart=/usr/local/bin/kube-apiserver \\
   --kubelet-client-certificate=/var/lib/kubernetes/kubernetes.pem \\
   --kubelet-client-key=/var/lib/kubernetes/kubernetes-key.pem \\
   --kubelet-https=true \\
-  --runtime-config=api/all \\
+  --runtime-config=api/all=true \\
   --service-account-key-file=/var/lib/kubernetes/service-account.pem \\
   --service-cluster-ip-range=10.32.0.0/24 \\
   --service-node-port-range=30000-32767 \\
@@ -198,90 +198,27 @@ sudo firewall-cmd --reload
 ### Start the Controller Services
 
 ```
-{
-  sudo systemctl daemon-reload
-  sudo systemctl enable kube-apiserver kube-controller-manager kube-scheduler
-  sudo systemctl start kube-apiserver kube-controller-manager kube-scheduler
-}
+sudo systemctl daemon-reload
+sudo systemctl enable kube-apiserver kube-controller-manager kube-scheduler
+sudo systemctl start kube-apiserver kube-controller-manager kube-scheduler
 ```
 
 > Allow up to 10 seconds for the Kubernetes API Server to fully initialize.
-
-### Enable HTTP Health Checks
-
-A [Google Network Load Balancer](https://cloud.google.com/compute/docs/load-balancing/network) will be used to distribute traffic across the three API servers and allow each API server to terminate TLS connections and validate client certificates. The network load balancer only supports HTTP health checks which means the HTTPS endpoint exposed by the API server cannot be used. As a workaround the nginx webserver can be used to proxy HTTP health checks. In this section nginx will be installed and configured to accept HTTP health checks on port `80` and proxy the connections to the API server on `https://127.0.0.1:6443/healthz`.
-
-> The `/healthz` API server endpoint does not require authentication by default.
-
-Install a basic web server to handle HTTP health checks:
-
-```
-sudo apt-get update
-sudo apt-get install -y nginx
-```
-
-```
-cat > kubernetes.default.svc.cluster.local <<EOF
-server {
-  listen      80;
-  server_name kubernetes.default.svc.cluster.local;
-
-  location /healthz {
-     proxy_pass                    https://127.0.0.1:6443/healthz;
-     proxy_ssl_trusted_certificate /var/lib/kubernetes/ca.pem;
-  }
-}
-EOF
-```
-
-```
-{
-  sudo mv kubernetes.default.svc.cluster.local \
-    /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
-
-  sudo ln -s /etc/nginx/sites-available/kubernetes.default.svc.cluster.local /etc/nginx/sites-enabled/
-}
-```
-
-```
-sudo systemctl restart nginx
-```
-
-```
-sudo systemctl enable nginx
-```
 
 ### Verification
 
 ```
 kubectl get componentstatuses --kubeconfig admin.kubeconfig
 ```
+> output
 
 ```
-NAME                 STATUS    MESSAGE              ERROR
+NAME                 STATUS    MESSAGE             ERROR
 controller-manager   Healthy   ok
 scheduler            Healthy   ok
-etcd-2               Healthy   {"health": "true"}
-etcd-0               Healthy   {"health": "true"}
-etcd-1               Healthy   {"health": "true"}
-```
-
-Test the nginx HTTP health check proxy:
-
-```
-curl -H "Host: kubernetes.default.svc.cluster.local" -i http://127.0.0.1/healthz
-```
-
-```
-HTTP/1.1 200 OK
-Server: nginx/1.14.0 (Ubuntu)
-Date: Sat, 14 Sep 2019 18:34:11 GMT
-Content-Type: text/plain; charset=utf-8
-Content-Length: 2
-Connection: keep-alive
-X-Content-Type-Options: nosniff
-
-ok
+etcd-0               Healthy   {"health":"true"}
+etcd-2               Healthy   {"health":"true"}
+etcd-1               Healthy   {"health":"true"}
 ```
 
 > Remember to run the above commands on each controller node: `controller-0`, `controller-1`, and `controller-2`.
@@ -295,7 +232,13 @@ In this section you will configure RBAC permissions to allow the Kubernetes API 
 The commands in this section will effect the entire cluster and only need to be run once from one of the controller nodes.
 
 ```
-gcloud compute ssh controller-0
+instance_id=$(oci compute instance list \
+  --compartment-id $C --raw-output \
+  --query "data[?\"display-name\" == 'controller-0'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
+
+external_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+
+ssh opc@$external_ip
 ```
 
 Create the `system:kube-apiserver-to-kubelet` [ClusterRole](https://kubernetes.io/docs/admin/authorization/rbac/#role-and-clusterrole) with permissions to access the Kubelet API and perform most common tasks associated with managing pods:
@@ -348,55 +291,63 @@ EOF
 
 ## The Kubernetes Frontend Load Balancer
 
-In this section you will provision an external load balancer to front the Kubernetes API Servers. The `kubernetes-the-hard-way` static IP address will be attached to the resulting load balancer.
+In this section you will provision the previously created public load balancer to front the Kubernetes API Servers.  See [Kubernetes Public IP Address from Public Load balancer)](03-compute-resources.md#kubernetes-public-ip-address-from-public-load-balancer)
 
 > The compute instances created in this tutorial will not have permission to complete this section. **Run the following commands from the same machine used to create the compute instances**.
 
 
-### Provision a Network Load Balancer
+### Configure Load Balancer for Kubernetes
 
-Create the external load balancer network resources:
+Retrieve the Load Balancer ID:
+```
+LB=$(oci lb load-balancer list --compartment-id $C \
+  --raw-output --query "data [?\"display-name\" == 'kubernetes-lb']|[0].\"id\"")
+echo $LB
+```
+
+> Allow up to 30 seconds for below each step to complete.
+
+Create Load Blancer backend-set:
+```
+oci lb backend-set create \
+  --policy ROUND_ROBIN --name kubernetes-backend-set \
+  --load-balancer-id $LB \
+  --health-checker-protocol TCP \
+  --health-checker-port 6443
 
 ```
-{
-  KUBERNETES_PUBLIC_ADDRESS=$(gcloud compute addresses describe kubernetes-the-hard-way \
-    --region $(gcloud config get-value compute/region) \
-    --format 'value(address)')
 
-  gcloud compute http-health-checks create kubernetes \
-    --description "Kubernetes Health Check" \
-    --host "kubernetes.default.svc.cluster.local" \
-    --request-path "/healthz"
+Create Load Balancer backends:
+```
+for i in 0 1 2; do
+  oci lb backend create \
+    --load-balancer-id $LB --backend-set-name kubernetes-backend-set \
+    --ip-address 10.240.0.1$i --port 6443
+done
+```
 
-  gcloud compute firewall-rules create kubernetes-the-hard-way-allow-health-check \
-    --network kubernetes-the-hard-way \
-    --source-ranges 209.85.152.0/22,209.85.204.0/22,35.191.0.0/16 \
-    --allow tcp
+Create Load Balancer listener:
+```
+oci lb listener create \
+  --name kubernetes-listener --load-balancer-id $LB \
+  --default-backend-set-name kubernetes-backend-set \
+  --port 6443 --protocol TCP
+```
 
-  gcloud compute target-pools create kubernetes-target-pool \
-    --http-health-check kubernetes
-
-  gcloud compute target-pools add-instances kubernetes-target-pool \
-   --instances controller-0,controller-1,controller-2
-
-  gcloud compute forwarding-rules create kubernetes-forwarding-rule \
-    --address ${KUBERNETES_PUBLIC_ADDRESS} \
-    --ports 6443 \
-    --region $(gcloud config get-value compute/region) \
-    --target-pool kubernetes-target-pool
-}
+List the Load Balancer:
+```
+oci lb load-balancer get --load-balancer-id $LB
 ```
 
 ### Verification
 
 > The compute instances created in this tutorial will not have permission to complete this section. **Run the following commands from the same machine used to create the compute instances**.
 
-Retrieve the `kubernetes-the-hard-way` static IP address:
-
+Retrieve the public IP address of the load balancer fronting the Kubernetes API Servers:
 ```
-KUBERNETES_PUBLIC_ADDRESS=$(gcloud compute addresses describe kubernetes-the-hard-way \
-  --region $(gcloud config get-value compute/region) \
-  --format 'value(address)')
+KUBERNETES_PUBLIC_ADDRESS=$(oci lb load-balancer get --load-balancer-id $LB \
+  --raw-output --query 'data."ip-addresses"|[0]."ip-address"')
+echo $KUBERNETES_PUBLIC_ADDRESS
 ```
 
 Make a HTTP request for the Kubernetes version info:
@@ -410,12 +361,12 @@ curl --cacert ca.pem https://${KUBERNETES_PUBLIC_ADDRESS}:6443/version
 ```
 {
   "major": "1",
-  "minor": "15",
-  "gitVersion": "v1.15.3",
-  "gitCommit": "2d3c76f9091b6bec110a5e63777c332469e0cba2",
+  "minor": "17",
+  "gitVersion": "v1.17.3",
+  "gitCommit": "06ad960bfd03b39c8310aaf92d1e7c12ce618213",
   "gitTreeState": "clean",
-  "buildDate": "2019-08-19T11:05:50Z",
-  "goVersion": "go1.12.9",
+  "buildDate": "2020-02-11T18:07:13Z",
+  "goVersion": "go1.13.6",
   "compiler": "gc",
   "platform": "linux/amd64"
 }

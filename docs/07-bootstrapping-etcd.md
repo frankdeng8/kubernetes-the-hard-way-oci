@@ -11,9 +11,9 @@ instance_id=$(oci compute instance list \
   --compartment-id $C --raw-output \
   --query "data[?\"display-name\" == 'controller-0'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
 
-public_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+external_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
 
-ssh opc@$public_ip
+ssh opc@$external_ip
 ```
 
 ### Running commands in parallel with tmux

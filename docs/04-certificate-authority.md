@@ -136,16 +136,16 @@ EOF
 
   echo $instance_id
 
-  public_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
-  echo $public_ip
-  private_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."private-ip"')
-  echo $private_ip
+  external_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+  echo $external_ip
+  internal_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."private-ip"')
+  echo $internal_ip
 
   cfssl gencert \
     -ca=ca.pem \
     -ca-key=ca-key.pem \
     -config=ca-config.json \
-    -hostname=${instance},${public_ip},${private_ip} \
+    -hostname=${instance},${external_ip},${internal_ip} \
     -profile=kubernetes \
     ${instance}-csr.json | cfssljson -bare ${instance}
 done
@@ -384,8 +384,8 @@ for instance in worker-0 worker-1 worker-2; do
   instance_id=$(oci compute instance list \
     --compartment-id $C --raw-output \
     --query "data[?\"display-name\" == '$instance'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
-  public_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
-  scp ca.pem ${instance}-key.pem ${instance}.pem opc@$public_ip:~
+  external_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+  scp ca.pem ${instance}-key.pem ${instance}.pem opc@$external_ip:~
 done
 ```
 
@@ -396,9 +396,9 @@ for instance in controller-0 controller-1 controller-2; do
   instance_id=$(oci compute instance list \
     --compartment-id $C --raw-output \
     --query "data[?\"display-name\" == '$instance'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
-  public_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+  external_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
   scp ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem \
-    service-account-key.pem service-account.pem opc@$public_ip:~
+    service-account-key.pem service-account.pem opc@$external_ip:~
 done
 ```
 
