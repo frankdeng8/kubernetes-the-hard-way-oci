@@ -272,6 +272,7 @@ for i in 0 1 2; do
     --subnet-id $SUBNET \
     --private-ip 10.240.0.2${i} \
     --assign-public-ip true \
+    --skip-source-dest-check true \
     --ssh-authorized-keys-file ~/.ssh/id_rsa.pub
 done
 ```

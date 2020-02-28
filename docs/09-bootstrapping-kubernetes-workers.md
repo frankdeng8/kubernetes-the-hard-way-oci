@@ -278,6 +278,18 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 ```
+### Configure firewall
+
+Allow port `10250` for kubelet and `10256` for kube-proxy:
+```
+sudo firewall-cmd --add-port={10250,10256}/tcp --permanent
+sudo firewall-cmd --reload
+```
+
+## Disable SELinux
+```
+sudo setenforce 0
+```
 
 ### Start the Worker Services
 

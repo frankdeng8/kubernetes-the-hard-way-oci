@@ -29,32 +29,97 @@ done
 
 ## Routes
 
+Retrieve the VCN `kubernetes-the-hard-way`:
+```
+VCN=$(oci network vcn list \
+  --compartment-id $C --raw-output \
+  --query "data [?\"display-name\" == 'kubernetes-the-hard-way']|[0].id")
+```
+Retrieve the default routing table:
+```
+RT=$(oci network route-table list \
+  --compartment-id $C --vcn-id $VCN --raw-output \
+  --query 'data[0].id')
+```
+
+Retrieve the subnet for kubernetes:
+```
+SUBNET=$(oci network subnet list \
+  --compartment-id $C --vcn-id $VCN --raw-output \
+  --query "data [?\"display-name\" == 'kubernetes-subnet']|[0].id")
+```
+
+Retrieve the Internet Gateway:
+```
+IGW=$( oci network internet-gateway list \
+  --compartment-id $C --vcn-id $VCN --raw-output \
+  --query "data [?\"display-name\" == 'kubernetes-igw']|[0].id")
+```
+
 Create network routes for each worker instance:
 
 ```
+routes="{\"destination\": \"0.0.0.0/0\",
+        \"destination-type\": \"CIDR_BLOCK\",
+        \"network-entity-id\": \"$IGW\"}"
+
 for i in 0 1 2; do
-  gcloud compute routes create kubernetes-route-10-200-${i}-0-24 \
-    --network kubernetes-the-hard-way \
-    --next-hop-address 10.240.0.2${i} \
-    --destination-range 10.200.${i}.0/24
+  internal_ip_id=$(oci network private-ip list \
+    --ip-address 10.240.0.2$i --subnet-id $SUBNET \
+    --raw-output --query "data [?\"ip-address\" == '10.240.0.2$i'] | [0].id")
+
+  routes="{
+      \"destination\": \"10.200.$i.0/24\",
+      \"destination-type\": \"CIDR_BLOCK\",
+      \"network-entity-id\": \"$internal_ip_id\"
+    }, $routes"
 done
+
+oci network route-table update --rt-id $RT \
+  --force \
+  --route-rules "[$routes]"
 ```
 
 List the routes in the `kubernetes-the-hard-way` VPC network:
 
 ```
-gcloud compute routes list --filter "network: kubernetes-the-hard-way"
+oci network route-table get --rt-id $RT --query 'data."route-rules"'
 ```
 
 > output
 
 ```
-NAME                            NETWORK                  DEST_RANGE     NEXT_HOP                  PRIORITY
-default-route-081879136902de56  kubernetes-the-hard-way  10.240.0.0/24  kubernetes-the-hard-way   1000
-default-route-55199a5aa126d7aa  kubernetes-the-hard-way  0.0.0.0/0      default-internet-gateway  1000
-kubernetes-route-10-200-0-0-24  kubernetes-the-hard-way  10.200.0.0/24  10.240.0.20               1000
-kubernetes-route-10-200-1-0-24  kubernetes-the-hard-way  10.200.1.0/24  10.240.0.21               1000
-kubernetes-route-10-200-2-0-24  kubernetes-the-hard-way  10.200.2.0/24  10.240.0.22               1000
+[
+  {
+    "cidr-block": null, 
+    "description": null, 
+    "destination": "10.200.2.0/24", 
+    "destination-type": "CIDR_BLOCK", 
+    "network-entity-id": "ocid1.privateip.oc1.iad.abuwcljrmubmenmhb7s7a3ixe47h7sv55knmqqq7iaxm4rbxux6sq6cnwbwa"
+  }, 
+  {
+    "cidr-block": null, 
+    "description": null, 
+    "destination": "10.200.1.0/24", 
+    "destination-type": "CIDR_BLOCK", 
+    "network-entity-id": "ocid1.privateip.oc1.iad.abuwcljtlqddmqik26rkulvdint46aqcvsnrnnddwpvwf43uxp2nx77yjngq"
+  }, 
+  {
+    "cidr-block": null, 
+    "description": null, 
+    "destination": "10.200.0.0/24", 
+    "destination-type": "CIDR_BLOCK", 
+    "network-entity-id": "ocid1.privateip.oc1.iad.abuwcljsev5adv56wv4llnqz3vkm54ahdhlidyblgjhtxhchglgga7dcscwq"
+  }, 
+  {
+    "cidr-block": null, 
+    "description": null, 
+    "destination": "0.0.0.0/0", 
+    "destination-type": "CIDR_BLOCK", 
+    "network-entity-id": "ocid1.internetgateway.oc1.iad.aaaaaaaaf6foj3bpe6azbgkuym7yw755qe6uraqkie3a6vammnint7xtg3ia"
+  }
+]
+
 ```
 
 Next: [Deploying the DNS Cluster Add-on](12-dns-addon.md)
