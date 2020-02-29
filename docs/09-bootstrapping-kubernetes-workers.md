@@ -44,6 +44,7 @@ If output is empthy then swap is not enabled. If swap is enabled run the followi
 
 ```
 sudo swapoff -a
+sudo sed -i '/swap/s/\(.*\)/# \1/g' /etc/fstab
 ```
 
 > To ensure swap remains off after reboot consult your Linux distro documentation.
@@ -280,15 +281,32 @@ EOF
 ```
 ### Configure firewall
 
-Allow port `10250` for kubelet and `10256` for kube-proxy:
+Allow port `10250` for kubelet
+
 ```
-sudo firewall-cmd --add-port={10250,10256}/tcp --permanent
+sudo firewall-cmd --add-port={10250,10256}/tcp --permanent # kubelet and kube-proxy
+sudo firewall-cmd --add-masquerade --permanent # enable NAT to route traffic between workers
+sudo firewall-cmd --permanent --add-port=30000-32767/tcp # NodePort expose
 sudo firewall-cmd --reload
 ```
 
+### Configure bridge network
+Set `net/bridge/bridge-nf-call-iptables=1` to ensure container network bridge work correctly with the iptables proxy.
+```
+cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+
+sudo sysctl --system
+
+```
+
 ## Disable SELinux
+Disable SELinux to ensure container network work correctly:
 ```
 sudo setenforce 0
+sudo sed -i 's/^SELINUX=.*/SELINUX=disabled/g' /etc/selinux/config
 ```
 
 ### Start the Worker Services

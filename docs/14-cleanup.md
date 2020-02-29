@@ -40,7 +40,7 @@ gcloud -q compute firewall-rules delete \
   kubernetes-the-hard-way-allow-health-check
 ```
 
-Delete the `kubernetes-the-hard-way` network VPC:
+Delete the `kubernetes-the-hard-way` VNC:
 
 ```
 {

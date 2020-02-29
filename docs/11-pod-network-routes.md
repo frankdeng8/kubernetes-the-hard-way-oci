@@ -8,7 +8,7 @@ In this lab you will create a route for each worker node that maps the node's Po
 
 ## The Routing Table
 
-In this section you will gather the information required to create routes in the `kubernetes-the-hard-way` VPC network.
+In this section you will gather the information required to create routes in the `kubernetes-the-hard-way` VNC.
 
 Print the internal IP address and Pod CIDR range for each worker instance:
 
@@ -80,7 +80,7 @@ oci network route-table update --rt-id $RT \
   --route-rules "[$routes]"
 ```
 
-List the routes in the `kubernetes-the-hard-way` VPC network:
+List the routes in the `kubernetes-the-hard-way` VCN:
 
 ```
 oci network route-table get --rt-id $RT --query 'data."route-rules"'
