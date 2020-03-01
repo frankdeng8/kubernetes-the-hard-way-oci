@@ -7,6 +7,7 @@ This is an Oracle Cloud Infrastructure version of awesome [Kubernetes The Hard W
 - Upgraded containerd to v1.3.3
 - Upgraded runc to v1.0.0-rc10
 - Upgraded CNI plugins to v0.8.5
+- Upgraded coredns to v1.6.7
 - Upgraded etcd to v3.4.4
 
 # Kubernetes The Hard Way
@@ -32,8 +33,8 @@ Kubernetes The Hard Way guides you through bootstrapping a highly available Kube
 
 * [kubernetes](https://github.com/kubernetes/kubernetes) 1.17.3
 * [containerd](https://github.com/containerd/containerd) 1.3.3
-* [coredns](https://github.com/coredns/coredns) v1.6.3
-* [cni](https://github.com/containernetworking/cni) v0.7.1
+* [runc](https://github.com/opencontainers/runc) 1.0-rc10
+* [coredns](https://github.com/coredns/coredns) v1.6.7
 * [cni plugins](https://github.com/containernetworking/plugins) v0.8.5
 * [etcd](https://github.com/etcd-io/etcd) v3.4.4
 
