@@ -1,3 +1,14 @@
+# About
+This is an Oracle Cloud Infrastructure version of awesome [Kubernetes The Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way) by Kelsey Hightower. I have made some changes along the way:
+
+- Used Oracle Linux 7 instead of Ubuntu.
+- Upgraded kubernetes to v1.17.3
+- Upgraded cri-tools to v1.17.0
+- Upgraded containerd to v1.3.3
+- Upgraded runc to v1.0.0-rc10
+- Upgraded CNI plugins to v0.8.5
+- Upgraded etcd to v3.4.4
+
 # Kubernetes The Hard Way
 
 This tutorial walks you through setting up Kubernetes the hard way. This guide is not for people looking for a fully automated command to bring up a Kubernetes cluster. If that's you then check out [Oracle Cloud Infrastructure Kubernetes Engine(OKE)](https://docs.cloud.oracle.com/en-us/iaas/Content/ContEng/Concepts/contengoverview.htm), or the [Getting Started Guides](https://kubernetes.io/docs/setup).
