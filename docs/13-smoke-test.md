@@ -16,8 +16,14 @@ kubectl create secret generic kubernetes-the-hard-way \
 Print a hexdump of the `kubernetes-the-hard-way` secret stored in etcd:
 
 ```
-gcloud compute ssh controller-0 \
-  --command "sudo ETCDCTL_API=3 etcdctl get \
+instance_id=$(oci compute instance list \
+  --compartment-id $C --raw-output \
+  --query "data[?\"display-name\" == 'controller-0'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
+
+external_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+
+ssh opc@$external_ip \
+  "sudo ETCDCTL_API=3 /usr/local/bin/etcdctl get \
   --endpoints=https://127.0.0.1:2379 \
   --cacert=/etc/etcd/ca.pem \
   --cert=/etc/etcd/kubernetes.pem \
@@ -32,17 +38,18 @@ gcloud compute ssh controller-0 \
 00000010  73 2f 64 65 66 61 75 6c  74 2f 6b 75 62 65 72 6e  |s/default/kubern|
 00000020  65 74 65 73 2d 74 68 65  2d 68 61 72 64 2d 77 61  |etes-the-hard-wa|
 00000030  79 0a 6b 38 73 3a 65 6e  63 3a 61 65 73 63 62 63  |y.k8s:enc:aescbc|
-00000040  3a 76 31 3a 6b 65 79 31  3a 44 ac 6e ac 11 2f 28  |:v1:key1:D.n../(|
-00000050  02 46 3d ad 9d cd 68 be  e4 cc 63 ae 13 e4 99 e8  |.F=...h...c.....|
-00000060  6e 55 a0 fd 9d 33 7a b1  17 6b 20 19 23 dc 3e 67  |nU...3z..k .#.>g|
-00000070  c9 6c 47 fa 78 8b 4d 28  cd d1 71 25 e9 29 ec 88  |.lG.x.M(..q%.)..|
-00000080  7f c9 76 b6 31 63 6e ea  ac c5 e4 2f 32 d7 a6 94  |..v.1cn..../2...|
-00000090  3c 3d 97 29 40 5a ee e1  ef d6 b2 17 01 75 a4 a3  |<=.)@Z.......u..|
-000000a0  e2 c2 70 5b 77 1a 0b ec  71 c3 87 7a 1f 68 73 03  |..p[w...q..z.hs.|
-000000b0  67 70 5e ba 5e 65 ff 6f  0c 40 5a f9 2a bd d6 0e  |gp^.^e.o.@Z.*...|
-000000c0  44 8d 62 21 1a 30 4f 43  b8 03 69 52 c0 b7 2e 16  |D.b!.0OC..iR....|
-000000d0  14 a5 91 21 29 fa 6e 03  47 e2 06 25 45 7c 4f 8f  |...!).n.G..%E|O.|
-000000e0  6e bb 9d 3b e9 e5 2d 9e  3e 0a                    |n..;..-.>.|
+00000040  3a 76 31 3a 6b 65 79 31  3a 3a 66 37 cc c0 8f da  |:v1:key1::f7....|
+00000050  e0 b2 a2 f5 b0 ab dd 48  90 8d fd d1 2a aa ac 5d  |.......H....*..]|
+00000060  bd 70 75 67 e1 10 0b 18  f1 0e 6d 59 b8 1f 17 f6  |.pug......mY....|
+00000070  fa 80 ee 25 b7 7e b8 8e  75 d3 6c f4 46 5c 2e 35  |...%.~..u.l.F\.5|
+00000080  db 43 f6 7d b6 1c 0e 3d  78 5f 7f b7 8c 6e 62 53  |.C.}...=x_...nbS|
+00000090  a4 68 17 f8 c4 eb 93 db  6a 49 4a d6 34 4e 9d 4e  |.h......jIJ.4N.N|
+000000a0  97 0c ba 64 b2 7f 40 76  0e e5 5c 08 4d 53 6b d5  |...d..@v..\.MSk.|
+000000b0  5f 73 c3 3a 59 b0 14 ca  e8 c9 5c fb dc f2 82 74  |_s.:Y.....\....t|
+000000c0  89 71 7d bc dd 11 11 de  6f d6 c4 7c cb 5c c1 ca  |.q}.....o..|.\..|
+000000d0  82 4a fc 2b db 08 e5 8a  33 62 3d 7c 8e 56 91 48  |.J.+....3b=|.V.H|
+000000e0  54 c7 c0 1a 2a 27 83 39  42 0a                    |T...*'.9B.|
+000000ea
 ```
 
 The etcd key should be prefixed with `k8s:enc:aescbc:v1:key1`, which indicates the `aescbc` provider was used to encrypt the data with the `key1` encryption key.
@@ -90,7 +97,6 @@ kubectl port-forward $POD_NAME 8080:80
 
 ```
 Forwarding from 127.0.0.1:8080 -> 80
-Forwarding from [::1]:8080 -> 80
 ```
 
 In a new terminal make an HTTP request using the forwarding address:
@@ -103,21 +109,21 @@ curl --head http://127.0.0.1:8080
 
 ```
 HTTP/1.1 200 OK
-Server: nginx/1.17.3
-Date: Sat, 14 Sep 2019 21:10:11 GMT
+Server: nginx/1.17.8
+Date: Sun, 01 Mar 2020 20:31:06 GMT
 Content-Type: text/html
 Content-Length: 612
-Last-Modified: Tue, 13 Aug 2019 08:50:00 GMT
+Last-Modified: Tue, 21 Jan 2020 13:36:08 GMT
 Connection: keep-alive
-ETag: "5d5279b8-264"
+ETag: "5e26fe48-264"
 Accept-Ranges: bytes
+
 ```
 
 Switch back to the previous terminal and stop the port forwarding to the `nginx` pod:
 
 ```
 Forwarding from 127.0.0.1:8080 -> 80
-Forwarding from [::1]:8080 -> 80
 Handling connection for 8080
 ^C
 ```
@@ -135,7 +141,7 @@ kubectl logs $POD_NAME
 > output
 
 ```
-127.0.0.1 - - [14/Sep/2019:21:10:11 +0000] "HEAD / HTTP/1.1" 200 0 "-" "curl/7.52.1" "-"
+127.0.0.1 - - [01/Mar/2020:20:31:06 +0000] "HEAD / HTTP/1.1" 200 0 "-" "curl/7.29.0" "-"
 ```
 
 ### Exec
@@ -151,7 +157,7 @@ kubectl exec -ti $POD_NAME -- nginx -v
 > output
 
 ```
-nginx version: nginx/1.17.3
+nginx version: nginx/1.17.8
 ```
 
 ## Services
@@ -173,19 +179,37 @@ NODE_PORT=$(kubectl get svc nginx \
   --output=jsonpath='{range .spec.ports[0]}{.nodePort}')
 ```
 
-Create a firewall rule that allows remote access to the `nginx` node port:
+Retrieve the VCN `kubernetes-the-hard-way`:
+```
+VCN=$(oci network vcn list \
+  --compartment-id $C --raw-output \
+  --query "data [?\"display-name\" == 'kubernetes-the-hard-way']|[0].id")
+```
+
+Retrieve the default security list:
 
 ```
-gcloud compute firewall-rules create kubernetes-the-hard-way-allow-nginx-service \
-  --allow=tcp:${NODE_PORT} \
-  --network kubernetes-the-hard-way
+SL=$(oci network security-list list --compartment-id  $C \
+  --vcn-id $VCN --raw-output \
+  --query "data[?contains(\"display-name\", 'Default')] | [0].\"id\"")
+```
+
+Update the security rule that allows remote access to the default node ports range 30000-32767:
+```
+oci network security-list update \
+  --force \
+  --security-list-id $SL \
+  --ingress-security-rules '[{"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 6, "isStateless": false, "tcpOptions": {"destinationPortRange": {"max": 22, "min": 22}}},  {"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 1, "isStateless": false}, {"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 6, "isStateless": false, "tcpOptions": {"destinationPortRange": {"max": 6443, "min": 6443}}}, {"source": "10.240.0.0/24", "sourceType": "CIDR_BLOCK", "protocol": "all", "isStateless": false}, {"source": "10.200.0.0/16", "sourceType": "CIDR_BLOCK", "protocol": "all", "isStateless": false}, {"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 6, "isStateless": false, "tcpOptions": {"destinationPortRange": {"max": 32767, "min": 30000}}}]'
 ```
 
 Retrieve the external IP address of a worker instance:
 
 ```
-EXTERNAL_IP=$(gcloud compute instances describe worker-0 \
-  --format 'value(networkInterfaces[0].accessConfigs[0].natIP)')
+instance_id=$(oci compute instance list \
+  --compartment-id $C --raw-output \
+  --query "data[?\"display-name\" == 'worker-0'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
+
+EXTERNAL_IP=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
 ```
 
 Make an HTTP request using the external IP address and the `nginx` node port:
