@@ -37,7 +37,7 @@ echo $VCN
 
 A [subnet](https://cloud.google.com/compute/docs/vpc/#vpc_networks_and_subnets) must be provisioned with an IP address range large enough to assign a private IP address to each node in the Kubernetes cluster.
 
-Create the `kubernetes` regional subnet in the `kubernetes-the-hard-way` VCN:
+Create the `kubernetes` regional subnet in the `kubernetes-the-hard-way` VCN, the regional subnet is across 3 availability domains in a region.
 
 ```
 SUBNET=$(oci network subnet create --compartment-id $C \
@@ -220,7 +220,7 @@ List and choose the instance shape:
 oci compute shape list --compartment-id $C --output table
 ```
 
-List and choose the availability domain:
+List the Availability Domain name prefix:
 ```
 AD=$(oci iam availability-domain list --raw-output --query 'data[0].name')
 echo $AD
@@ -273,6 +273,7 @@ for i in 0 1 2; do
     --private-ip 10.240.0.2${i} \
     --assign-public-ip true \
     --skip-source-dest-check true \
+    --extended-metadata "{\"prod-cidr\": \"10.200.$i.0/24\"}" \
     --ssh-authorized-keys-file ~/.ssh/id_rsa.pub
 done
 ```
@@ -307,7 +308,13 @@ oci compute instance list --compartment-id $C \
 
 Log into the `controller-0` instance:
 ```
-ssh opc@<controller-0 public IP>
+instance_id=$(oci compute instance list \
+  --compartment-id $C --raw-output \
+  --query "data[?\"display-name\" == 'controller-0'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
+
+external_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."public-ip"')
+
+ssh opc@$external_ip
 ```
 
 ## Kubernetes Public IP Address from Public Load balancer
