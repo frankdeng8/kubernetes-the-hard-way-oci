@@ -273,7 +273,7 @@ for i in 0 1 2; do
     --private-ip 10.240.0.2${i} \
     --assign-public-ip true \
     --skip-source-dest-check true \
-    --extended-metadata "{\"prod-cidr\": \"10.200.$i.0/24\"}" \
+    --extended-metadata "{\"pod-cidr\": \"10.200.$i.0/24\"}" \
     --ssh-authorized-keys-file ~/.ssh/id_rsa.pub
 done
 ```
@@ -357,7 +357,8 @@ oci lb load-balancer create --compartment-id $C \
   --display-name kubernetes-lb \
   --is-private false \
   --shape-name 100Mbps \
-  --subnet-ids "[\"$LB_SUBNET\"]"
+  --subnet-ids "[\"$LB_SUBNET\"]" \
+  --wait-for-state SUCCEEDED
 ```
 Retrieve the Load Balancer ID:
 ```

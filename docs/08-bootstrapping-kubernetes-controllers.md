@@ -305,8 +305,6 @@ LB=$(oci lb load-balancer list --compartment-id $C \
 echo $LB
 ```
 
-> Allow up to 30 seconds for below each step to complete.
-
 Create Load Blancer backend-set:
 ```
 oci lb backend-set create \

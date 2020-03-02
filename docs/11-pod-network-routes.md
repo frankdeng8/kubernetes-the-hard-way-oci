@@ -14,8 +14,12 @@ Print the internal IP address and Pod CIDR range for each worker instance:
 
 ```
 for instance in worker-0 worker-1 worker-2; do
-  gcloud compute instances describe ${instance} \
-    --format 'value[separator=" "](networkInterfaces[0].networkIP,metadata.items[0].value)'
+  instance_id=$(oci compute instance list \
+    --compartment-id $C --raw-output \
+    --query "data[?\"display-name\" == '$instance'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
+  internal_ip=$(oci compute instance list-vnics --instance-id $instance_id --raw-output --query 'data[0]."private-ip"')
+  pod_cidr=$(oci compute instance get --instance-id  $instance_id --raw-output --query 'data."extended-metadata"."prod-cidr"')
+  echo "$internal_ip $pod_cidr"
 done
 ```
 
