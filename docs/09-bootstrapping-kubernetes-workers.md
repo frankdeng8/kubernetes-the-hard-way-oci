@@ -32,7 +32,7 @@ sudo yum -y install socat conntrack-tools ipset
 
 ### Disable Swap
 
-By default the kubelet will fail to start if [swap](https://help.ubuntu.com/community/SwapFaq) is enabled. It is [recommended](https://github.com/kubernetes/kubernetes/issues/7294) that swap be disabled to ensure Kubernetes can provide proper resource allocation and quality of service.
+By default the kubelet will fail to start if [swap](https://docs.oracle.com/en/operating-systems/oracle-linux/7/admin/ol7-s4-storage.html) is enabled. It is [recommended](https://github.com/kubernetes/kubernetes/issues/7294) that swap be disabled to ensure Kubernetes can provide proper resource allocation and quality of service.
 
 Verify if swap is enabled:
 
