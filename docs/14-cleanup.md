@@ -7,50 +7,61 @@ In this lab you will delete the compute resources created during this tutorial.
 Delete the controller and worker compute instances:
 
 ```
-gcloud -q compute instances delete \
-  controller-0 controller-1 controller-2 \
-  worker-0 worker-1 worker-2 \
-  --zone $(gcloud config get-value compute/zone)
+for name in worker controller; do
+  for i in 0 1 2; do
+    instance_id=$(oci compute instance list \
+      --compartment-id $C --raw-output \
+      --query "data[?\"display-name\" == '${name}-$i'] | [?\"lifecycle-state\" == 'RUNNING'] | [0].\"id\"")
+    oci compute instance terminate --force --instance-id $instance_id
+  done
+done
 ```
 
 ## Networking
 
-Delete the external load balancer network resources:
+Delete the public load balancer network resources:
 
 ```
-{
-  gcloud -q compute forwarding-rules delete kubernetes-forwarding-rule \
-    --region $(gcloud config get-value compute/region)
+# delete load balancer
+LB=$(oci lb load-balancer list --compartment-id $C \
+  --raw-output --query "data [?\"display-name\" == 'kubernetes-lb']|[0].\"id\"")
+oci lb load-balancer delete --force --load-balancer-id $LB
 
-  gcloud -q compute target-pools delete kubernetes-target-pool
+VCN=$(oci network vcn list \
+  --compartment-id $C --raw-output \
+  --query "data [?\"display-name\" == 'kubernetes-the-hard-way']|[0].id")
 
-  gcloud -q compute http-health-checks delete kubernetes
+# delete subnet
+LB_SUBNET=$(oci network subnet list \
+  --compartment-id $C --vcn-id $VCN --raw-output \
+  --query "data [?\"display-name\" == 'kubernetes-lb']|[0].id")
+oci network subnet delete --wait-for-state TERMINATED --force --subnet-id $LB_SUBNET
 
-  gcloud -q compute addresses delete kubernetes-the-hard-way
-}
+# delete security list
+LB_SL=$(oci network security-list list --compartment-id  $C \
+  --vcn-id $VCN --raw-output \
+  --query "data[?\"display-name\" == 'kubernetes-lb'] | [0].\"id\"")
+oci network security-list delete --security-list-id $LB_SL
 ```
 
-Delete the `kubernetes-the-hard-way` firewall rules:
-
+Delete the `kubernetes-the-hard-way` VCN resouces:
 ```
-gcloud -q compute firewall-rules delete \
-  kubernetes-the-hard-way-allow-nginx-service \
-  kubernetes-the-hard-way-allow-internal \
-  kubernetes-the-hard-way-allow-external \
-  kubernetes-the-hard-way-allow-health-check
-```
+# delete subnet
+SUBNET=$(oci network subnet list \
+  --compartment-id $C --vcn-id $VCN --raw-output \
+  --query "data [?\"display-name\" == 'kubernetes-subnet']|[0].id")
+oci network subnet delete --wait-for-state TERMINATED --subnet-id $SUBNET
 
-Delete the `kubernetes-the-hard-way` VNC:
+# delete route rules
+RT=$(oci network route-table list --compartment-id $C --vcn-id $VCN --raw-output --query 'data[0].id')
+oci network route-table update --force --route-rules "[]" --rt-id=$RT
 
-```
-{
-  gcloud -q compute routes delete \
-    kubernetes-route-10-200-0-0-24 \
-    kubernetes-route-10-200-1-0-24 \
-    kubernetes-route-10-200-2-0-24
+# delete internet-gateway
+IGW=$(oci network internet-gateway list \
+  --compartment-id $C --vcn-id $VCN --raw-output \
+  --query "data [?\"display-name\" == 'kubernetes-igw']|[0].id")
+oci network internet-gateway delete --wait-for-state TERMINATED --ig-id $IGW
 
-  gcloud -q compute networks subnets delete kubernetes
-
-  gcloud -q compute networks delete kubernetes-the-hard-way
-}
+# delete vcn
+oci network vcn delete --wait-for-state TERMINATED --vcn-id $VCN
 ```

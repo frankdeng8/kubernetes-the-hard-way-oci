@@ -320,14 +320,14 @@ The public IP address of the load balancer will be the public IP address for Kub
 Create a security list for load balancer in `Kubernetes-the-hard-way` VCN, allow ingress traffic for Kubernetes API server port 6443 and all egress traffic.
 
 ```
-LB_SE=$(oci network security-list create \
+LB_SL=$(oci network security-list create \
   --display-name kubernetes-lb \
   --compartment-id $C \
   --vcn-id $VCN \
   --egress-security-rules '[{"destination": "0.0.0.0/0", "destinationType": "CIDR_BLOCK", "protocol": "all", "isStateless": false}]' \
   --ingress-security-rules '[{"source": "0.0.0.0/0", "sourceType": "CIDR_BLOCK", "protocol": 6, "isStateless": false, "tcpOptions": {"destinationPortRange": {"max": 6443, "min": 6443}}} ]' \
   --raw-output --query 'data.id')
-echo $LB_SE
+echo $LB_SL
 ```
 ### Subnet
 Create the `kubernetes-lb` regional subnet for the load balancer in the `kubernetes-the-hard-way` VCN:
@@ -337,7 +337,7 @@ LB_SUBNET=$(oci network subnet create --compartment-id $C \
   --vcn-id $VCN \
   --display-name kubernetes-lb \
   --dns-label kuberneteslb \
-  --security-list-ids "[\"$LB_SE\"]" \
+  --security-list-ids "[\"$LB_SL\"]" \
   --cidr-block 10.240.10.0/24 \
   --raw-output --query 'data.id')
 echo $LB_SUBNET
